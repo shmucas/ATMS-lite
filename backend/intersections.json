@@ -1,0 +1,10 @@
+[
+  {
+    "id": "bench-2070",
+    "name": "Bench MaxTime 2070",
+    "host": "10.42.0.2",
+    "port": 161,
+    "lat": null,
+    "lon": null
+  }
+]
