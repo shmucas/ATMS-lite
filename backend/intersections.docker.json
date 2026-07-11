@@ -1,0 +1,6 @@
+[
+  {"id": "virtual-1", "name": "5th Ave & 42nd St", "host": "emulator-1", "port": 161, "lat": 40.7380, "lon": -73.9855},
+  {"id": "virtual-2", "name": "5th Ave & 34th St", "host": "emulator-2", "port": 161, "lat": 40.7484, "lon": -73.9857},
+  {"id": "virtual-3", "name": "Broadway & 42nd St", "host": "emulator-3", "port": 161, "lat": 40.7566, "lon": -73.9863},
+  {"id": "virtual-4", "name": "Park Ave & 42nd St", "host": "emulator-4", "port": 161, "lat": 40.7527, "lon": -73.9772}
+]

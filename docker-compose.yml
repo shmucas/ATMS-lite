@@ -1,0 +1,35 @@
+# Multi-intersection ATMS stack. Each virtual intersection runs in its own
+# lightweight container; the gateway backend polls them all and the frontend
+# serves the dashboard. The physical 2070 stays intersection #1 and is reached
+# by running the backend on the host instead (see docs), since it lives on the
+# bench Ethernet segment, not the Docker network.
+services:
+  emulator-1:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-1 }
+  emulator-2:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-2 }
+  emulator-3:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-3 }
+  emulator-4:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-4 }
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - emulator-1
+      - emulator-2
+      - emulator-3
+      - emulator-4
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ConnectionBanner } from './components/ConnectionBanner'
 import { Detectors } from './components/Detectors'
 import { Health } from './components/Health'
 import { IntersectionCard } from './components/IntersectionCard'
+import { IntersectionGrid } from './components/IntersectionGrid'
 import { MapView } from './components/MapView'
 import { Card, TabButton } from './components/ui'
 import { useAtmsStream } from './lib/stream'
@@ -12,6 +13,14 @@ type Tab = 'overview' | 'map' | 'detectors' | 'health'
 export function App() {
   const stream = useAtmsStream()
   const [tab, setTab] = useState<Tab>('overview')
+  const [selected, setSelected] = useState<string | null>(null)
+
+  // Default the detail view to the first intersection once the stream arrives.
+  useEffect(() => {
+    if (selected === null && stream.intersections.length > 0) {
+      setSelected(stream.intersections[0].id)
+    }
+  }, [selected, stream.intersections])
 
   return (
     <div className="min-h-screen">
@@ -68,14 +77,26 @@ export function App() {
                 Waiting for the backend stream...
               </Card>
             )}
-            {stream.intersections.map((ix) => (
-              <IntersectionCard
-                key={ix.id}
-                info={ix}
-                snapshot={stream.snapshots[ix.id]}
-                control={stream.control[ix.id]}
+            {stream.intersections.length > 1 && (
+              <IntersectionGrid
+                stream={stream}
+                selected={selected}
+                onSelect={setSelected}
               />
-            ))}
+            )}
+            {(() => {
+              const ix =
+                stream.intersections.find((i) => i.id === selected) ??
+                stream.intersections[0]
+              if (!ix) return null
+              return (
+                <IntersectionCard
+                  info={ix}
+                  snapshot={stream.snapshots[ix.id]}
+                  control={stream.control[ix.id]}
+                />
+              )
+            })()}
           </>
         )}
         {tab === 'map' && <MapView stream={stream} />}
