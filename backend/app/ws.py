@@ -24,6 +24,13 @@ async def stream(ws: WebSocket):
     pollers = ws.app.state.pollers
     queue = hub.subscribe()
     try:
+        # Replay the event buffer: a client connecting mid-session must still
+        # see the history (disconnects, reboots), not just what happens next.
+        history = []
+        for buffer in hub.events.values():
+            history.extend(buffer)
+        history.sort(key=lambda e: e['ts'])
+
         await ws.send_json({
             'type': 'hello',
             'intersections': [
@@ -34,6 +41,7 @@ async def stream(ws: WebSocket):
                 for p in pollers.values()
             ],
             'snapshots': hub.latest,
+            'events': history,
         })
         while True:
             message = await queue.get()
