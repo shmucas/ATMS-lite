@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { ConnectionBanner } from './components/ConnectionBanner'
+import { Detectors } from './components/Detectors'
 import { Health } from './components/Health'
 import { IntersectionCard } from './components/IntersectionCard'
 import { MapView } from './components/MapView'
 import { Card, TabButton } from './components/ui'
 import { useAtmsStream } from './lib/stream'
 
-type Tab = 'overview' | 'map' | 'health'
+type Tab = 'overview' | 'map' | 'detectors' | 'health'
 
 export function App() {
   const stream = useAtmsStream()
@@ -30,6 +31,12 @@ export function App() {
           </TabButton>
           <TabButton active={tab === 'map'} onClick={() => setTab('map')}>
             Map
+          </TabButton>
+          <TabButton
+            active={tab === 'detectors'}
+            onClick={() => setTab('detectors')}
+          >
+            Detectors
           </TabButton>
           <TabButton active={tab === 'health'} onClick={() => setTab('health')}>
             Health
@@ -72,6 +79,7 @@ export function App() {
           </>
         )}
         {tab === 'map' && <MapView stream={stream} />}
+        {tab === 'detectors' && <Detectors stream={stream} />}
         {tab === 'health' && <Health stream={stream} />}
       </main>
     </div>

@@ -21,6 +21,48 @@ COORD_LOCAL_FREE = f'{ASC}.4.13.0'
 
 COORD_OIDS = [COORD_PATTERN, COORD_CYCLE, COORD_SYNC, COORD_LOCAL_FREE]
 
+# Unit status. Values change with controller mode; we emit an event on change
+# rather than assigning meaning to each code we cannot verify without the MIB.
+UNIT_CONTROL_STATUS = f'{ASC}.3.5.0'
+UNIT_FLASH_STATUS = f'{ASC}.3.6.0'
+UNIT_OIDS = [UNIT_CONTROL_STATUS, UNIT_FLASH_STATUS]
+
+# vehicleDetectorVolumeOccupancyTable, asc.2.4.1. col 2 = volume, col 3 =
+# occupancy. Occupancy 255 is the NTCIP "no data" sentinel.
+DET_VOLUME_COL = 2
+DET_OCCUPANCY_COL = 3
+DET_NO_DATA = 255
+
+
+def detector_oids(count):
+    oids = []
+    for d in range(1, count + 1):
+        oids.append(f'{ASC}.2.4.1.{DET_VOLUME_COL}.{d}')
+        oids.append(f'{ASC}.2.4.1.{DET_OCCUPANCY_COL}.{d}')
+    return oids
+
+
+def decode_detectors(values, count):
+    dets = []
+    for d in range(1, count + 1):
+        vol = values.get(f'{ASC}.2.4.1.{DET_VOLUME_COL}.{d}')
+        occ = values.get(f'{ASC}.2.4.1.{DET_OCCUPANCY_COL}.{d}')
+        try:
+            vol = int(vol)
+        except (TypeError, ValueError):
+            vol = None
+        try:
+            occ = int(occ)
+        except (TypeError, ValueError):
+            occ = None
+        dets.append({
+            'detector': d,
+            'volume': vol,
+            'occupancy': None if occ == DET_NO_DATA else occ,
+            'reporting': occ != DET_NO_DATA,
+        })
+    return dets
+
 # phaseStatusGroupTable columns. Each row g covers phases (g-1)*8+1 .. g*8
 # as a bitmask, LSB = lowest phase of the group.
 STATUS_COLS = {

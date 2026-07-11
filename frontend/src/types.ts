@@ -26,6 +26,18 @@ export interface Coord {
   reference_phase: number | null
 }
 
+export interface Detector {
+  detector: number
+  volume: number | null
+  occupancy: number | null
+  reporting: boolean
+}
+
+export interface Moe {
+  phases: { phase: number; green_pct: number; samples: number }[]
+  window_polls: number
+}
+
 export interface Snapshot {
   schema: string
   intersection_id: string
@@ -37,6 +49,8 @@ export interface Snapshot {
   phases: Phase[]
   masks: Record<string, number>
   coord?: Coord
+  detectors?: Detector[]
+  moe?: Moe
 }
 
 export interface AtmsEvent {

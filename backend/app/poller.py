@@ -24,6 +24,9 @@ STARTING = 'starting'
 
 DISCONNECTED_AFTER = 3
 RECONNECT_INTERVAL = 2.0
+SLOW_EVERY = 10          # poll detectors every Nth fast poll
+DET_COUNT = 8            # detectors to poll (matches the 8 active phases)
+MOE_WINDOW = 600         # green-utilization sample window (polls)
 
 
 def _now():
@@ -53,6 +56,14 @@ class Poller:
         self.last_greens = set()
         self.reference_phase = None
         self.last_cycle_start = None
+        self.tick = 0
+        self.det_count = DET_COUNT
+        self.detectors = []
+        self.unit_status = {}
+        self.green_samples_maxlen = MOE_WINDOW
+        self.green_samples = collections.defaultdict(
+            lambda: collections.deque(maxlen=MOE_WINDOW))
+        self.total_samples = 0
         self._static_loaded = False
 
     def _event(self, kind, detail=''):
@@ -111,8 +122,14 @@ class Poller:
 
     async def _poll_once(self):
         t0 = time.monotonic()
+        # Detectors and unit status change slowly, so fold them in only every
+        # SLOW_EVERY fast polls to keep the common PDU small.
+        self.tick += 1
+        slow = self.tick % SLOW_EVERY == 0
         oids = ([ntcip.SYS_UPTIME] + ntcip.status_oids(self.groups)
-                + ntcip.COORD_OIDS)
+                + ntcip.COORD_OIDS + ntcip.UNIT_OIDS)
+        if slow:
+            oids += ntcip.detector_oids(self.det_count)
         values = await self.client.get(oids)
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         uptime = int(values.get(ntcip.SYS_UPTIME, 0))
@@ -157,6 +174,28 @@ class Poller:
         cycle_elapsed = (round(time.monotonic() - self.last_cycle_start, 1)
                          if self.last_cycle_start is not None else None)
 
+        # MOE: fraction of recent polls each phase was green. A real, verifiable
+        # measure of effectiveness computed from the signal stream itself, so it
+        # works even on a bench with no detector traffic.
+        for p in phases:
+            self.green_samples[p['phase']].append(1 if p['signal'] == 'green' else 0)
+        self.total_samples += 1
+
+        # Unit status: emit an event when the controller's mode changes.
+        for oid, name in ((ntcip.UNIT_CONTROL_STATUS, 'control-status'),
+                          (ntcip.UNIT_FLASH_STATUS, 'flash-status')):
+            val = coord_int(oid)
+            if val is not None and self.unit_status.get(oid) not in (None, val):
+                self._event('unit-status-change',
+                            f'{name} {self.unit_status[oid]} -> {val}')
+            if val is not None:
+                self.unit_status[oid] = val
+
+        detectors = self.detectors
+        if slow:
+            detectors = ntcip.decode_detectors(values, self.det_count)
+            self.detectors = detectors
+
         self.seq += 1
         return {
             'schema': 'atms.snapshot.v1',
@@ -187,7 +226,24 @@ class Poller:
                 'cycle_elapsed': cycle_elapsed,
                 'reference_phase': self.reference_phase,
             },
+            'detectors': detectors,
+            'moe': self._moe(),
         }
+
+    def _moe(self):
+        """Per-phase green utilization over the sample window, plus a coverage
+        count so the UI can say how solid the number is."""
+        out = []
+        for phase in sorted(self.green_samples):
+            samples = self.green_samples[phase]
+            if not samples:
+                continue
+            out.append({
+                'phase': phase,
+                'green_pct': round(100 * sum(samples) / len(samples), 1),
+                'samples': len(samples),
+            })
+        return {'phases': out, 'window_polls': self.green_samples_maxlen}
 
     def _on_success(self):
         if self.state != CONNECTED:
