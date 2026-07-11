@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AtmsEvent, Connection, IntersectionInfo, Snapshot } from '../types'
 
+export interface ControlState {
+  armed: boolean
+  armed_until: string | null
+  veh_calls: Record<string, number>
+  ped_calls: Record<string, number>
+}
+
 export interface StreamState {
   wsConnected: boolean
   intersections: IntersectionInfo[]
   snapshots: Record<string, Snapshot>
   events: AtmsEvent[]
   latencyHistory: Record<string, number[]>
+  control: Record<string, ControlState>
 }
 
 const EMPTY: StreamState = {
@@ -15,6 +23,7 @@ const EMPTY: StreamState = {
   snapshots: {},
   events: [],
   latencyHistory: {},
+  control: {},
 }
 
 const CONNECTION_EVENTS: Record<string, Connection> = {
@@ -50,6 +59,7 @@ export function useAtmsStream(): StreamState {
             intersections: m.intersections,
             snapshots: { ...s.snapshots, ...m.snapshots },
             events: m.events ?? s.events,
+            control: { ...s.control, ...(m.control ?? {}) },
           }))
         } else if (m.type === 'snapshot') {
           const snap: Snapshot = m.data
@@ -72,6 +82,12 @@ export function useAtmsStream(): StreamState {
               },
             }
           })
+        } else if (m.type === 'control') {
+          const { intersection_id, ...rest } = m.data
+          setState((s) => ({
+            ...s,
+            control: { ...s.control, [intersection_id]: rest as ControlState },
+          }))
         } else if (m.type === 'event') {
           const ev: AtmsEvent = m.data
           const conn = CONNECTION_EVENTS[ev.kind]

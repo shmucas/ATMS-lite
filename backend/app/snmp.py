@@ -3,11 +3,13 @@
 from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
     ContextData,
+    Integer,
     ObjectIdentity,
     ObjectType,
     SnmpEngine,
     UdpTransportTarget,
     get_cmd,
+    set_cmd,
 )
 
 
@@ -32,11 +34,15 @@ def _dotted(oid_obj):
 
 
 class SnmpClient:
-    def __init__(self, host, port, community, timeout=0.5, retries=0):
+    def __init__(self, host, port, community, timeout=0.5, retries=0,
+                 write_community=None):
         self.host = host
         self.port = port
         self._engine = SnmpEngine()
         self._auth = CommunityData(community, mpModel=0)  # v1 only agent
+        self._write_auth = (
+            CommunityData(write_community, mpModel=0)
+            if write_community else self._auth)
         self._timeout = timeout
         self._retries = retries
         self._target = None
@@ -64,3 +70,15 @@ class SnmpClient:
         if err_status:
             raise SnmpError(err_status.prettyPrint())
         return {_dotted(vb[0]): vb[1] for vb in result}
+
+    async def set_int(self, oid, value):
+        """SET a single integer OID. Returns the value the agent echoes back."""
+        target = await self._get_target()
+        err_ind, err_status, _, result = await set_cmd(
+            self._engine, self._write_auth, target, ContextData(),
+            ObjectType(ObjectIdentity(oid), Integer(value)))
+        if err_ind:
+            raise SnmpTimeout(str(err_ind))
+        if err_status:
+            raise SnmpError(err_status.prettyPrint())
+        return int(result[0][1])

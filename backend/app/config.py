@@ -45,6 +45,9 @@ def load_intersections():
             'port': int(item.get('port', 161)),
             'read_community': item.get(
                 'read_community', ENV.get('ATMS_SNMP_READ_COMMUNITY', 'public')),
+            'write_community': item.get(
+                'write_community',
+                ENV.get('ATMS_SNMP_WRITE_COMMUNITY', 'public')),
             'lat': item.get('lat'),
             'lon': item.get('lon'),
             # How many 8-phase status groups to poll each cycle. MaxTime

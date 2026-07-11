@@ -42,6 +42,7 @@ async def stream(ws: WebSocket):
             ],
             'snapshots': hub.latest,
             'events': history,
+            'control': hub.control,
         })
         while True:
             message = await queue.get()

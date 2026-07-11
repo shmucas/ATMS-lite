@@ -36,7 +36,8 @@ class Poller:
         self.hub = hub
         self.interval = 1.0 / poll_hz
         self.client = SnmpClient(cfg['host'], cfg['port'], cfg['read_community'],
-                                 timeout=1.0, retries=1)
+                                 timeout=1.0, retries=1,
+                                 write_community=cfg.get('write_community'))
         # Starts in its own state, not DISCONNECTED, so that a controller which
         # is already dead at boot still emits a disconnected event.
         self.state = STARTING
@@ -44,6 +45,7 @@ class Poller:
         self.seq = 0
         self.groups = 1
         self.max_phases = 8
+        self.controller = None  # set by main after construction
         self.last_uptime = None
         self.last_latency_ms = None
         self.cycle_length = None
@@ -200,6 +202,10 @@ class Poller:
             if self.state != DISCONNECTED:
                 self.state = DISCONNECTED
                 self._event('disconnected', str(exc))
+                # Safety: a link we cannot see is a link we must not hold calls
+                # on. Drop arm and desired state on disconnect.
+                if self.controller is not None:
+                    asyncio.create_task(self.controller.on_disconnect())
         elif self.state in (CONNECTED, STARTING):
             self.state = DEGRADED
             self._event('degraded', str(exc))

@@ -12,7 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import router
-from .config import CORS_ORIGINS, POLL_HZ, load_intersections
+from .config import CORS_ORIGINS, POLL_HZ, ROOT, load_intersections
+from .control import AuditLog, Controller
 from .poller import Poller
 from .state import Hub
 from .ws import router as ws_router
@@ -25,16 +26,26 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     hub = Hub()
+    audit = AuditLog(ROOT / 'docs' / 'backups' / 'control-audit.jsonl')
     pollers = {}
+    controllers = {}
     tasks = []
     for cfg in load_intersections():
         poller = Poller(cfg, hub, POLL_HZ)
+        controller = Controller(cfg, poller.client, hub, audit)
+        poller.controller = controller
         pollers[cfg['id']] = poller
+        controllers[cfg['id']] = controller
         tasks.append(asyncio.create_task(
             poller.run(), name=f"poller-{cfg['id']}"))
     app.state.hub = hub
     app.state.pollers = pollers
+    app.state.controllers = controllers
+    app.state.audit = audit
     yield
+    # Safety: clear every call we placed before the process exits.
+    await asyncio.gather(*(c.shutdown() for c in controllers.values()),
+                         return_exceptions=True)
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)

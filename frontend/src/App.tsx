@@ -1,21 +1,12 @@
 import { useState } from 'react'
 import { ConnectionBanner } from './components/ConnectionBanner'
-import { CoordMonitor } from './components/CoordMonitor'
 import { Health } from './components/Health'
+import { IntersectionCard } from './components/IntersectionCard'
 import { MapView } from './components/MapView'
-import { RingDiagram } from './components/RingDiagram'
-import { Card, CardHeader, ConnectionBadge, TabButton } from './components/ui'
+import { Card, TabButton } from './components/ui'
 import { useAtmsStream } from './lib/stream'
 
 type Tab = 'overview' | 'map' | 'health'
-
-function uptimeText(ticks?: number) {
-  if (ticks == null) return '--'
-  const s = Math.floor(ticks / 100)
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  return `${h}h ${m.toString().padStart(2, '0')}m`
-}
 
 export function App() {
   const stream = useAtmsStream()
@@ -70,44 +61,14 @@ export function App() {
                 Waiting for the backend stream...
               </Card>
             )}
-            {stream.intersections.map((ix) => {
-              const snap = stream.snapshots[ix.id]
-              return (
-                <Card key={ix.id}>
-                  <CardHeader>
-                    <div className="flex items-baseline gap-3">
-                      <h2 className="font-semibold text-slate-100">{ix.name}</h2>
-                      <span className="text-xs text-slate-500">
-                        {ix.static?.sys_descr}
-                      </span>
-                    </div>
-                    <ConnectionBadge state={ix.connection} />
-                  </CardHeader>
-                  <div className="space-y-4 px-4 py-4">
-                    {snap ? (
-                      <>
-                        <RingDiagram snapshot={snap} info={ix} />
-                        <CoordMonitor snapshot={snap} />
-                        <div className="tabular flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
-                          <span>seq {snap.seq}</span>
-                          <span>poll {snap.poll_latency_ms} ms</span>
-                          <span>uptime {uptimeText(snap.uptime_ticks)}</span>
-                          <span>
-                            {ix.static?.polled_phases ?? 8} of{' '}
-                            {ix.static?.controller_max_phases ?? '?'} phases polled
-                          </span>
-                          <span>{snap.ts}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="py-6 text-center text-sm text-slate-500">
-                        No data yet from this controller.
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )
-            })}
+            {stream.intersections.map((ix) => (
+              <IntersectionCard
+                key={ix.id}
+                info={ix}
+                snapshot={stream.snapshots[ix.id]}
+                control={stream.control[ix.id]}
+              />
+            ))}
           </>
         )}
         {tab === 'map' && <MapView stream={stream} />}

@@ -12,6 +12,7 @@ class Hub:
     def __init__(self):
         self.latest = {}    # intersection id -> last good snapshot
         self.static = {}    # intersection id -> static controller info
+        self.control = {}   # intersection id -> control/arm status
         self.events = collections.defaultdict(
             lambda: collections.deque(maxlen=200))
         self._subscribers = set()
@@ -31,6 +32,10 @@ class Hub:
     def publish_event(self, event):
         self.events[event['intersection_id']].append(event)
         self._fanout({'type': 'event', 'data': event})
+
+    def publish_control(self, intersection_id, status):
+        self._fanout({'type': 'control',
+                      'data': {'intersection_id': intersection_id, **status}})
 
     def _fanout(self, message):
         for queue in list(self._subscribers):
