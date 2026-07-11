@@ -1,7 +1,10 @@
 """REST endpoints. The WebSocket stream lands in M3."""
 
-from fastapi import APIRouter, Body, HTTPException, Request
+import secrets
 
+from fastapi import APIRouter, Body, Header, HTTPException, Request
+
+from .config import CONTROL_TOKEN
 from .control import ControlError
 
 router = APIRouter()
@@ -12,6 +15,15 @@ def _controller(request, iid):
     if controller is None:
         raise HTTPException(404, f'unknown intersection {iid}')
     return controller
+
+
+def _require_control_token(token):
+    """Guard the write endpoints. No-op when no token is configured (open bench
+    mode); constant-time compare when one is set."""
+    if not CONTROL_TOKEN:
+        return
+    if not token or not secrets.compare_digest(token, CONTROL_TOKEN):
+        raise HTTPException(401, 'invalid or missing control token')
 
 
 def _summary(poller, hub):
@@ -70,17 +82,23 @@ def control_status(iid: str, request: Request):
 
 
 @router.post('/api/intersections/{iid}/arm')
-async def arm(iid: str, request: Request):
+async def arm(iid: str, request: Request,
+              x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
     return await _controller(request, iid).arm()
 
 
 @router.post('/api/intersections/{iid}/disarm')
-async def disarm(iid: str, request: Request):
+async def disarm(iid: str, request: Request,
+                 x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
     return await _controller(request, iid).disarm()
 
 
 @router.post('/api/intersections/{iid}/call')
-async def place_call(iid: str, request: Request, body: dict = Body(...)):
+async def place_call(iid: str, request: Request, body: dict = Body(...),
+                     x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
     controller = _controller(request, iid)
     kind = body.get('kind', 'veh')
     phase = body.get('phase')

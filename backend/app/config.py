@@ -31,6 +31,11 @@ ENV = {**_load_env_file(ROOT / '.env'), **os.environ}
 POLL_HZ = float(ENV.get('ATMS_POLL_HZ', '5'))
 CORS_ORIGINS = ENV.get('ATMS_CORS_ORIGINS', 'http://localhost:5173').split(',')
 
+# Token guarding the control (write) endpoints. When unset, control is open,
+# which is fine for a bench on an isolated segment; set it before any
+# deployment that is reachable by others. Reads and the stream stay open.
+CONTROL_TOKEN = ENV.get('ATMS_CONTROL_TOKEN', '').strip()
+
 
 def load_intersections():
     path = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',

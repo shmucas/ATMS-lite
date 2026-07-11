@@ -1,7 +1,14 @@
+// Optional control token. Set VITE_CONTROL_TOKEN at build time to match the
+// backend's ATMS_CONTROL_TOKEN when control is guarded.
+const TOKEN = import.meta.env.VITE_CONTROL_TOKEN ?? ''
+
 async function post(path: string, body?: unknown) {
+  const headers: Record<string, string> = {}
+  if (body) headers['content-type'] = 'application/json'
+  if (TOKEN) headers['x-control-token'] = TOKEN
   const res = await fetch(path, {
     method: 'POST',
-    headers: body ? { 'content-type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   })
   if (!res.ok) {

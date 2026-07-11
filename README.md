@@ -1,37 +1,87 @@
 # ATMS-lite
 
-A locally hosted Advanced Traffic Management System (ATMS) that talks NTCIP 1202 over SNMP to a physical Q-Free MaxTime 2070 traffic controller. FastAPI backend, React dashboard, Docker-based multi-intersection scaling.
+A locally hosted Advanced Traffic Management System that talks NTCIP 1202 over
+SNMP to a physical Q-Free MaxTime 2070 traffic controller, scales to many
+intersections through lightweight virtual controllers, and drives a live React
+dashboard.
 
-## Architecture
+Built and verified end to end against real hardware.
 
-- Backend: FastAPI (Python) with an asynchronous SNMP poller
-- Frontend: React + Vite + Tailwind CSS + shadcn/ui, live updates over WebSocket
-- Protocol: NTCIP 1202 objects over SNMP v1 on UDP port 161. The MaxTime agent silently ignores v2c, so everything speaks v1.
-- Physical layer: direct Ethernet from the laptop to the 2070
-- Scale-out: one lightweight virtual controller container per simulated intersection. The physical 2070 is intersection #1.
+## What it does
 
-## Repo layout
+- **Live signal monitoring.** Polls phase status (red/yellow/green), ped
+  states, and vehicle/ped calls at ~5 Hz over SNMP v1, streamed to the browser
+  over WebSocket.
+- **Interactive ring-and-barrier diagram.** Built from the controller's own
+  ring and concurrency configuration, not a template. Click a phase to place a
+  call.
+- **Control path with safety interlocks.** Vehicle and ped calls are written to
+  the controller only when an intersection is explicitly armed. Calls auto-clear
+  on disarm, disconnect, and shutdown. Every write is audited. Control endpoints
+  can require a token.
+- **Coordination monitor.** Pattern and a cycle length measured from the signal
+  stream itself (the controller runs actuated, so the cycle varies).
+- **Detector and MOE stats.** Detector volume/occupancy plus per-phase green
+  utilization computed from the signal stream.
+- **Map and weather.** OpenStreetMap via Leaflet, pins colored by connection
+  state, live weather from Open-Meteo (no API key).
+- **Multi-intersection.** A gateway backend polls many controllers at once; each
+  virtual intersection runs in its own container. One going offline degrades
+  only its own tile.
+- **Graceful hardware handling.** Connection state machine (connected → degraded
+  → disconnected) with non-blocking background reconnect. Health is judged by
+  SNMP responses, since the controller drops ICMP.
+
+## Stack
+
+- Backend: FastAPI, asyncio SNMP v1 poller (pysnmp), WebSocket stream
+- Frontend: React 19 + Vite + Tailwind v4, Leaflet
+- Emulator: hand-rolled SNMP v1 agent + dual-ring actuated signal engine, no
+  third-party deps
+- Deploy: Docker Compose (backend + frontend + N emulator containers)
+
+## Run it
+
+Point `backend/intersections.json` at your controller, then:
 
 ```
-backend/    FastAPI service                 (code starts at M2)
-frontend/   React app                       (code starts at M3)
-emulator/   virtual NTCIP controller        (code starts at M7)
-tools/      bench utilities and discovery   (starts at M1)
-docs/       runbooks, milestone plan, OID inventory
+python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
+.venv/bin/uvicorn app.main:app --app-dir backend --port 8000
+
+npm install --prefix frontend
+npm run dev --prefix frontend      # http://localhost:5173
 ```
 
-## Bench quick check
-
-Network bring-up and its gotchas live in [docs/network-setup.md](docs/network-setup.md). Once cabled:
+A virtual controller for testing without hardware:
 
 ```
-./tools/check_link.sh
+EMU_SNMP_PORT=1161 .venv/bin/python emulator/main.py
 ```
 
-## Milestones
+The full containerized multi-intersection stack is in
+[docs/docker.md](docs/docker.md).
 
-Development is gated: no code for milestone N until milestone N-1 is tested and functional. The full ladder with exit tests is in [docs/milestones.md](docs/milestones.md). Status: M0 complete, M1 (OID discovery) is next.
+## Layout
+
+```
+backend/    FastAPI poller, control path, REST + WebSocket
+frontend/   React dashboard
+emulator/   virtual NTCIP controller (SNMP agent + signal engine)
+tools/      SNMP discovery CLI and bench utilities
+docs/       network runbook, OID reference, milestone log, docker guide
+```
+
+## Docs
+
+- [docs/network-setup.md](docs/network-setup.md) - bench bring-up and the
+  hard-won gotchas
+- [docs/ntcip-oids.md](docs/ntcip-oids.md) - the OIDs read and written, decoded
+  against the real unit
+- [docs/milestones.md](docs/milestones.md) - the gated build log, M0-M9
+- [docs/docker.md](docs/docker.md) - the containerized stack
 
 ## Safety
 
-Development happens against a standalone bench controller. All SNMP writes will sit behind an arm/disarm interlock, auto-clear on disconnect, and an audit log. Control features must never be pointed at field equipment.
+Developed against a standalone bench controller. Control writes sit behind a
+server-side arm/disarm interlock, auto-clear on any loss of visibility, and are
+audited. Do not point the control path at field equipment.
