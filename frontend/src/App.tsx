@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { ConnectionBanner } from './components/ConnectionBanner'
+import { CoordMonitor } from './components/CoordMonitor'
 import { Health } from './components/Health'
 import { MapView } from './components/MapView'
-import { PhaseGrid } from './components/PhaseGrid'
+import { RingDiagram } from './components/RingDiagram'
 import { Card, CardHeader, ConnectionBadge, TabButton } from './components/ui'
 import { useAtmsStream } from './lib/stream'
 
@@ -82,10 +83,11 @@ export function App() {
                     </div>
                     <ConnectionBadge state={ix.connection} />
                   </CardHeader>
-                  <div className="space-y-3 px-4 py-4">
+                  <div className="space-y-4 px-4 py-4">
                     {snap ? (
                       <>
-                        <PhaseGrid snapshot={snap} />
+                        <RingDiagram snapshot={snap} info={ix} />
+                        <CoordMonitor snapshot={snap} />
                         <div className="tabular flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
                           <span>seq {snap.seq}</span>
                           <span>poll {snap.poll_latency_ms} ms</span>

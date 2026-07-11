@@ -7,6 +7,7 @@ SNMP responses only; this controller drops or ignores other traffic.
 """
 
 import asyncio
+import collections
 import datetime
 import logging
 import time
@@ -45,6 +46,11 @@ class Poller:
         self.max_phases = 8
         self.last_uptime = None
         self.last_latency_ms = None
+        self.cycle_length = None
+        self.recent_cycles = collections.deque(maxlen=10)
+        self.last_greens = set()
+        self.reference_phase = None
+        self.last_cycle_start = None
         self._static_loaded = False
 
     def _event(self, kind, detail=''):
@@ -62,6 +68,30 @@ class Poller:
                                  self.cfg.get('poll_groups', 2)))
         self.max_phases = min(controller_max, self.groups * 8)
         sys_descr = values.get(ntcip.SYS_DESCR, '')
+
+        # Read the intersection's real ring structure off the controller rather
+        # than assuming the textbook 8-phase layout.
+        phases = list(range(1, self.max_phases + 1))
+        ring_oids = [f'{ntcip.PHASE_RING}.{p}' for p in phases]
+        conc_oids = [f'{ntcip.PHASE_CONCURRENCY}.{p}' for p in phases]
+        rings, barriers = [], []
+        try:
+            cfg_values = await self.client.get(ring_oids + conc_oids)
+            ring_by_phase = {}
+            conc_by_phase = {}
+            for p in phases:
+                ring = cfg_values.get(f'{ntcip.PHASE_RING}.{p}')
+                if ring is None:
+                    continue
+                ring_by_phase[p] = int(ring)
+                conc_by_phase[p] = ntcip.parse_concurrency(
+                    cfg_values.get(f'{ntcip.PHASE_CONCURRENCY}.{p}'))
+            rings, barriers = ntcip.build_rings(ring_by_phase, conc_by_phase)
+        except SnmpError as exc:
+            # Ring config is a nicety; a controller that will not answer here
+            # should still stream phase status.
+            log.warning('[%s] could not read ring config: %s', self.cfg['id'], exc)
+
         self.hub.static[self.cfg['id']] = {
             'sys_descr': sys_descr.prettyPrint()
             if hasattr(sys_descr, 'prettyPrint') else str(sys_descr),
@@ -69,14 +99,18 @@ class Poller:
             'controller_phase_groups': controller_groups,
             'polled_groups': self.groups,
             'polled_phases': self.max_phases,
+            'rings': rings,
+            'barriers': barriers,
         }
         self._static_loaded = True
-        log.info('[%s] static loaded: %s phases in %s groups',
-                 self.cfg['id'], self.max_phases, self.groups)
+        log.info('[%s] static loaded: %s phases, rings=%s barriers=%s',
+                 self.cfg['id'], self.max_phases,
+                 [r['phases'] for r in rings], barriers)
 
     async def _poll_once(self):
         t0 = time.monotonic()
-        oids = [ntcip.SYS_UPTIME] + ntcip.status_oids(self.groups)
+        oids = ([ntcip.SYS_UPTIME] + ntcip.status_oids(self.groups)
+                + ntcip.COORD_OIDS)
         values = await self.client.get(oids)
         latency_ms = round((time.monotonic() - t0) * 1000, 1)
         uptime = int(values.get(ntcip.SYS_UPTIME, 0))
@@ -88,6 +122,39 @@ class Poller:
         self.last_latency_ms = latency_ms
 
         masks = ntcip.decode_groups(values, self.groups)
+
+        def coord_int(oid):
+            raw = values.get(oid)
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                return None
+
+        phases = ntcip.phase_list(masks, self.max_phases)
+
+        # Measure the cycle by timing the signals themselves rather than
+        # trusting a coordination counter. Every phase goes green once per
+        # cycle, so the interval between consecutive rising edges of the same
+        # phase's green IS the cycle length. This works on any controller and
+        # in free mode, and it is verifiable against a stopwatch.
+        greens = {p['phase'] for p in phases if p['signal'] == 'green'}
+        rising = greens - self.last_greens
+        self.last_greens = greens
+        if self.reference_phase is None and rising:
+            self.reference_phase = min(rising)
+        if self.reference_phase in rising:
+            now = time.monotonic()
+            if self.last_cycle_start is not None:
+                measured = now - self.last_cycle_start
+                # Ignore absurd values from a stalled or restarted controller.
+                if 20 <= measured <= 600:
+                    self.cycle_length = round(measured, 1)
+                    self.recent_cycles.append(self.cycle_length)
+            self.last_cycle_start = now
+
+        cycle_elapsed = (round(time.monotonic() - self.last_cycle_start, 1)
+                         if self.last_cycle_start is not None else None)
+
         self.seq += 1
         return {
             'schema': 'atms.snapshot.v1',
@@ -97,8 +164,27 @@ class Poller:
             'connection': CONNECTED,
             'uptime_ticks': uptime,
             'poll_latency_ms': latency_ms,
-            'phases': ntcip.phase_list(masks, self.max_phases),
+            'phases': phases,
             'masks': masks,
+            'coord': {
+                # Raw NTCIP coordination objects, reported as the controller
+                # states them.
+                'pattern': coord_int(ntcip.COORD_PATTERN),
+                'cycle_status': coord_int(ntcip.COORD_CYCLE),
+                'sync_timer': coord_int(ntcip.COORD_SYNC),
+                'local_free': coord_int(ntcip.COORD_LOCAL_FREE),
+                # Measured by this poller from the observed signal sequence,
+                # not read from the controller. This intersection runs
+                # actuated, so cycle length varies with demand: report the last
+                # one and a rolling average rather than pretending it is fixed.
+                'last_cycle': self.cycle_length,
+                'avg_cycle': (round(sum(self.recent_cycles)
+                                    / len(self.recent_cycles), 1)
+                              if self.recent_cycles else None),
+                'cycles_seen': len(self.recent_cycles),
+                'cycle_elapsed': cycle_elapsed,
+                'reference_phase': self.reference_phase,
+            },
         }
 
     def _on_success(self):

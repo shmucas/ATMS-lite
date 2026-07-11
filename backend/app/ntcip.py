@@ -7,6 +7,20 @@ SYS_UPTIME = '1.3.6.1.2.1.1.3.0'
 MAX_PHASES = f'{ASC}.1.1.0'
 MAX_PHASE_GROUPS = f'{ASC}.1.3.0'
 
+# phaseTable columns, read once at startup to learn the intersection's real
+# ring structure instead of assuming the textbook 8-phase layout.
+PHASE_RING = f'{ASC}.1.2.1.22'          # .phase -> ring number
+PHASE_CONCURRENCY = f'{ASC}.1.2.1.23'   # .phase -> octets, one per concurrent phase
+
+# Coordination status. Verified on the bench unit: 4.12 counts up once per
+# second and wraps at the cycle length, so it is the cycle timer.
+COORD_PATTERN = f'{ASC}.4.10.0'
+COORD_CYCLE = f'{ASC}.4.11.0'
+COORD_SYNC = f'{ASC}.4.12.0'
+COORD_LOCAL_FREE = f'{ASC}.4.13.0'
+
+COORD_OIDS = [COORD_PATTERN, COORD_CYCLE, COORD_SYNC, COORD_LOCAL_FREE]
+
 # phaseStatusGroupTable columns. Each row g covers phases (g-1)*8+1 .. g*8
 # as a bitmask, LSB = lowest phase of the group.
 STATUS_COLS = {
@@ -46,6 +60,69 @@ def decode_groups(values, groups):
             combined |= (int(raw) & 0xFF) << ((group - 1) * 8)
         masks[key] = combined
     return masks
+
+
+def parse_concurrency(value):
+    """phaseConcurrency is an octet string, one octet per concurrent phase.
+
+    The bench controller renders it as '05 06 ' via net-snmp, meaning phases 5
+    and 6 may run alongside this one. pysnmp hands us the raw octets.
+    """
+    if value is None:
+        return []
+    try:
+        raw = bytes(value)
+    except TypeError:
+        return []
+    return sorted({b for b in raw if b})
+
+
+def build_rings(ring_by_phase, concurrency_by_phase):
+    """Turn the controller's own ring and concurrency config into the ring and
+    barrier layout the UI draws.
+
+    A barrier is a set of phases that may run together. Two phases sit in the
+    same barrier group when they are concurrent with each other, so we group
+    phases by their concurrency set. This reads the truth off the controller
+    rather than assuming the textbook 1-8 layout.
+    """
+    # Ring 0 means the phase is not assigned to a ring: the controller
+    # advertises 40 phases but only the configured ones are real. Drop the rest
+    # so the diagram shows the actual intersection.
+    active = {p for p, r in ring_by_phase.items() if r > 0}
+
+    rings = {}
+    for phase, ring in sorted(ring_by_phase.items()):
+        if phase in active:
+            rings.setdefault(ring, []).append(phase)
+
+    # Group phases into barriers: phases that share a concurrency set belong to
+    # the same barrier. Key on the frozenset of (self + concurrent phases).
+    groups = {}
+    for phase in sorted(concurrency_by_phase):
+        if phase not in active:
+            continue
+        members = frozenset(
+            [phase, *(c for c in concurrency_by_phase[phase] if c in active)])
+        groups.setdefault(members, set()).add(phase)
+
+    merged = []
+    for members in groups:
+        placed = False
+        for barrier in merged:
+            if barrier & members:
+                barrier |= members
+                placed = True
+                break
+        if not placed:
+            merged.append(set(members))
+
+    barriers = [sorted(b) for b in merged]
+    barriers.sort(key=lambda b: b[0] if b else 0)
+    return (
+        [{'ring': r, 'phases': p} for r, p in sorted(rings.items())],
+        barriers,
+    )
 
 
 def phase_list(masks, max_phases):

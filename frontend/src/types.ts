@@ -12,6 +12,20 @@ export interface Phase {
   next: boolean
 }
 
+export interface Coord {
+  pattern: number | null
+  cycle_status: number | null
+  sync_timer: number | null
+  local_free: number | null
+  /* Measured by the backend from the observed signal sequence, not reported
+     by the controller. Actuated operation means cycle length varies. */
+  last_cycle: number | null
+  avg_cycle: number | null
+  cycles_seen: number
+  cycle_elapsed: number | null
+  reference_phase: number | null
+}
+
 export interface Snapshot {
   schema: string
   intersection_id: string
@@ -22,6 +36,7 @@ export interface Snapshot {
   poll_latency_ms: number
   phases: Phase[]
   masks: Record<string, number>
+  coord?: Coord
 }
 
 export interface AtmsEvent {
@@ -43,5 +58,7 @@ export interface IntersectionInfo {
     controller_phase_groups?: number
     polled_groups?: number
     polled_phases?: number
+    rings?: { ring: number; phases: number[] }[]
+    barriers?: number[][]
   } | null
 }
