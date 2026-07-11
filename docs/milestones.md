@@ -18,6 +18,6 @@ Rule: no code for milestone N until milestone N-1 is fully tested and functional
 Notes:
 
 - Dashboard extras agreed at kickoff: coordination monitor, OpenStreetMap overview, detector/MOE stats, system health panel, weather via Open-Meteo (free, no API key).
-- M5 requires the SNMP write community string and a fresh controller database backup (web UI export) before the first SET goes out.
+- M5: the SNMP write community lives in the local .env. The pre-SET database backup was waived by the project owner on 2026-07-10. The community gets verified at M5 with a harmless SET that rewrites a current value onto itself.
 - Docker Desktop on the dev Mac is outdated (23.0.1) and must be updated before M7.
 - The MaxTime agent is SNMP v1 only. All tooling and backend code must speak v1.
