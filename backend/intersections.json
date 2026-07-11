@@ -6,5 +6,13 @@
     "port": 161,
     "lat": 40.7359,
     "lon": -73.9911
+  },
+  {
+    "id": "virtual-1",
+    "name": "Virtual Controller 1",
+    "host": "127.0.0.1",
+    "port": 1161,
+    "lat": 40.7380,
+    "lon": -73.9855
   }
 ]
