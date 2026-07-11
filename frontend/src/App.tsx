@@ -1,108 +1,81 @@
 import { useEffect, useState } from 'react'
-import { ConnectionBanner } from './components/ConnectionBanner'
-import { Detectors } from './components/Detectors'
-import { Health } from './components/Health'
-import { IntersectionCard } from './components/IntersectionCard'
-import { IntersectionGrid } from './components/IntersectionGrid'
-import { MapView } from './components/MapView'
-import { Card, TabButton } from './components/ui'
+import { DetailDrawer } from './components/DetailDrawer'
+import { SignalMap } from './components/SignalMap'
+import { TopBar } from './components/TopBar'
 import { useAtmsStream } from './lib/stream'
-
-type Tab = 'overview' | 'map' | 'detectors' | 'health'
 
 export function App() {
   const stream = useAtmsStream()
-  const [tab, setTab] = useState<Tab>('overview')
   const [selected, setSelected] = useState<string | null>(null)
 
-  // Default the detail view to the first intersection once the stream arrives.
+  // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
-    if (selected === null && stream.intersections.length > 0) {
-      setSelected(stream.intersections[0].id)
+    if (selected && !stream.intersections.some((i) => i.id === selected)) {
+      setSelected(null)
     }
   }, [selected, stream.intersections])
 
-  return (
-    <div className="min-h-screen">
-      <ConnectionBanner state={stream} />
-      <header className="flex items-center justify-between border-b border-slate-800 px-5 py-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-bold tracking-tight text-slate-100">
-            ATMS<span className="text-sky-400">-lite</span>
-          </h1>
-          <span className="text-xs text-slate-500">
-            NTCIP traffic management
-          </span>
-        </div>
-        <nav className="flex gap-1">
-          <TabButton active={tab === 'overview'} onClick={() => setTab('overview')}>
-            Overview
-          </TabButton>
-          <TabButton active={tab === 'map'} onClick={() => setTab('map')}>
-            Map
-          </TabButton>
-          <TabButton
-            active={tab === 'detectors'}
-            onClick={() => setTab('detectors')}
-          >
-            Detectors
-          </TabButton>
-          <TabButton active={tab === 'health'} onClick={() => setTab('health')}>
-            Health
-          </TabButton>
-        </nav>
-        <span
-          className={
-            stream.wsConnected
-              ? 'flex items-center gap-2 text-xs text-emerald-400'
-              : 'flex items-center gap-2 text-xs text-red-400'
-          }
-        >
-          <span
-            className={
-              stream.wsConnected
-                ? 'h-2 w-2 rounded-full bg-emerald-400'
-                : 'h-2 w-2 animate-pulse rounded-full bg-red-400'
-            }
-          />
-          {stream.wsConnected ? 'live' : 'offline'}
-        </span>
-      </header>
+  const backendDown = !stream.wsConnected
 
-      <main className="mx-auto max-w-6xl space-y-4 px-5 py-5">
-        {tab === 'overview' && (
-          <>
-            {stream.intersections.length === 0 && (
-              <Card className="p-8 text-center text-slate-500">
-                Waiting for the backend stream...
-              </Card>
-            )}
-            {stream.intersections.length > 1 && (
-              <IntersectionGrid
-                stream={stream}
-                selected={selected}
-                onSelect={setSelected}
-              />
-            )}
-            {(() => {
-              const ix =
-                stream.intersections.find((i) => i.id === selected) ??
-                stream.intersections[0]
-              if (!ix) return null
-              return (
-                <IntersectionCard
-                  info={ix}
-                  snapshot={stream.snapshots[ix.id]}
-                  control={stream.control[ix.id]}
-                />
-              )
-            })()}
-          </>
+  return (
+    <div className="flex h-full flex-col">
+      <TopBar stream={stream} />
+
+      {backendDown && (
+        <div className="z-[1000] bg-[var(--color-offline)] px-4 py-1.5 text-center text-xs font-semibold text-white">
+          Backend link lost. Reconnecting...
+        </div>
+      )}
+
+      <div className="relative flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1">
+          {stream.intersections.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-3)]">
+              Connecting to the traffic network...
+            </div>
+          ) : (
+            <SignalMap
+              stream={stream}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          )}
+
+          {/* Map legend, bottom-left, so status reads without opening anything. */}
+          {stream.intersections.length > 0 && (
+            <div className="pointer-events-none absolute bottom-4 left-4 z-[500] flex flex-col gap-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-2 text-[11px] text-[var(--color-ink-2)] backdrop-blur">
+              <div className="mb-0.5 font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+                Comms
+              </div>
+              <Legend color="var(--color-online)" label="Online" />
+              <Legend color="var(--color-degraded)" label="Degraded" />
+              <Legend color="var(--color-offline)" label="Offline" />
+              <div className="mt-1 text-[10px] text-[var(--color-ink-3)]">
+                Click a signal for detail
+              </div>
+            </div>
+          )}
+        </div>
+
+        {selected && (
+          <div className="absolute inset-y-0 right-0 z-[600] sm:relative">
+            <DetailDrawer
+              stream={stream}
+              id={selected}
+              onClose={() => setSelected(null)}
+            />
+          </div>
         )}
-        {tab === 'map' && <MapView stream={stream} />}
-        {tab === 'detectors' && <Detectors stream={stream} />}
-        {tab === 'health' && <Health stream={stream} />}
-      </main>
+      </div>
+    </div>
+  )
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      <span>{label}</span>
     </div>
   )
 }
