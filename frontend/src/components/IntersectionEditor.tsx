@@ -162,29 +162,6 @@ export function IntersectionEditor(props: {
           )}
         </Field>
 
-        {target.mode === 'create' && (
-          <Field label="Docker emulator">
-            <select
-              className="input"
-              value=""
-              onChange={(e) => {
-                const n = e.target.value
-                if (!n) return
-                setHost(`emulator-${n}`)
-                setPort('161')
-                setDeviceType('maxtime')
-              }}
-            >
-              <option value="">Not a Docker emulator</option>
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  docker-emulator-{n}
-                </option>
-              ))}
-            </select>
-          </Field>
-        )}
-
         <Field label="IP address / host">
           <input
             className="input"
@@ -208,7 +185,17 @@ export function IntersectionEditor(props: {
           <select
             className="input"
             value={deviceType}
-            onChange={(e) => setDeviceType(e.target.value as DeviceType)}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v.startsWith('docker:')) {
+                const n = v.slice('docker:'.length)
+                setHost(`emulator-${n}`)
+                setPort('161')
+                setDeviceType('maxtime')
+                return
+              }
+              setDeviceType(v as DeviceType)
+            }}
           >
             {(['maxtime', 'econolite', 'siemens'] as DeviceType[]).map((dt) => {
               const enabled = supported.includes(dt)
@@ -219,6 +206,15 @@ export function IntersectionEditor(props: {
                 </option>
               )
             })}
+            {target.mode === 'create' && (
+              <optgroup label="Docker emulator (autofills host/port)">
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={`docker:${n}`}>
+                    docker-emulator-{n}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </Field>
 

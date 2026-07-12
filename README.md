@@ -77,10 +77,10 @@ respond, and opens the dashboard. Pass `--build` to rebuild images first,
 available virtual intersections instead of the default 4.
 
 Registering one of those emulators as an intersection doesn't require typing
-its host/port by hand: the "Add intersection" form has a "Docker emulator"
-dropdown (`docker-emulator-1..10`) that autofills host, port, and device API
-for you, since emulator container IPs aren't stable across restarts - only
-the Compose service name (`emulator-N`) is.
+its host/port by hand: the "Add intersection" form's "Device API" dropdown
+lists `docker-emulator-1..10` alongside the real device protocols - picking
+one autofills host and port for you, since emulator container IPs aren't
+stable across restarts and only the Compose service name (`emulator-N`) is.
 
 ## Layout
 

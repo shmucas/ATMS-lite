@@ -40,10 +40,12 @@ docker compose --profile extra up -d emulator-5
 or `tools/start_docker.sh --extra` to bring up all 10 at once. Starting the
 container is not enough on its own though - it's just a new SNMP target on the
 Docker network. Register it as an intersection from the dashboard's
-"Add intersection" form: pick the matching entry (`docker-emulator-1..10`)
-from the "Docker emulator" dropdown and it autofills host (`emulator-N`), port
-(`161`), and device API (MaxTime) for you. This is the same create flow used
-for any other intersection; there's no separate provisioning step.
+"Add intersection" form: the "Device API" dropdown lists `docker-emulator-1`
+through `docker-emulator-10` alongside the real protocol choices (MaxTime,
+Econolite, Siemens); picking one autofills host (`emulator-N`) and port
+(`161`), then settles the dropdown back on MaxTime, since that's the emulator's
+actual protocol. This is the same create flow used for any other intersection;
+there's no separate provisioning step.
 
 Container IPs on the Docker network are dynamic (reassigned on every
 `up`/restart), so the form intentionally fills in the Compose *service name*
