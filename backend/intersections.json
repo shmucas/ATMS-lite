@@ -7,14 +7,5 @@
     "lat": 33.8454156104391,
     "lon": -84.35846149921419,
     "device_type": "maxtime"
-  },
-  {
-    "id": "peachtree-road-lenox-rd",
-    "name": "Peachtree Road @ Lenox Rd",
-    "host": "10.42.0.3",
-    "port": 161,
-    "device_type": "maxtime",
-    "lat": 33.850583696357305,
-    "lon": -84.36208248138428
   }
 ]
