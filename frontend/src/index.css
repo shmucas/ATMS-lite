@@ -7,7 +7,10 @@
   /* Control-room palette: deep steel base, cyan accent, unambiguous status.
      Comms status (online/offline) is kept visually distinct from signal
      colors (red/yellow/green) so the two never get confused. */
-  --color-base: #0a0f16;
+  /* Named "canvas", not "base": Tailwind reserves "base" for its text-base
+     font-size utility, and a theme color of that name silently overrides it,
+     turning any text-base element's color into this background color. */
+  --color-canvas: #0a0f16;
   --color-panel: #111823;
   --color-panel-2: #161f2c;
   --color-line: #1f2a3a;
@@ -30,7 +33,7 @@ body,
 
 body {
   margin: 0;
-  background: var(--color-base);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;

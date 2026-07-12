@@ -75,29 +75,42 @@ interface MenuState {
   lon: number
 }
 
+interface MarkerMenuState {
+  x: number
+  y: number
+  id: string
+  name: string
+}
+
 function MapContextMenu({
   onCreateAt,
   disabled,
+  onInteraction,
 }: {
   onCreateAt: (lat: number, lon: number) => void
   disabled?: boolean
+  onInteraction: () => void
 }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
 
   const map = useMapEvents({
     contextmenu(e) {
+      onInteraction()
       if (disabled) return
       const point = map.latLngToContainerPoint(e.latlng)
       setMenu({ x: point.x, y: point.y, lat: e.latlng.lat, lon: e.latlng.lng })
     },
     click() {
       setMenu(null)
+      onInteraction()
     },
     movestart() {
       setMenu(null)
+      onInteraction()
     },
     zoomstart() {
       setMenu(null)
+      onInteraction()
     },
   })
 
@@ -124,6 +137,39 @@ function MapContextMenu({
         }}
       >
         Create intersection here
+      </button>
+    </div>
+  )
+}
+
+function MarkerContextMenu({
+  menu,
+  onClose,
+  onDelete,
+}: {
+  menu: MarkerMenuState
+  onClose: () => void
+  onDelete: (id: string, name: string) => void
+}) {
+  return (
+    <div
+      className="absolute z-[900] min-w-[180px] rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-panel)] py-1 text-sm shadow-xl"
+      style={{ left: menu.x, top: menu.y }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        className="block w-full px-3.5 py-2 text-left text-[var(--color-offline)] hover:bg-[var(--color-panel-2)]"
+        onMouseDown={(e) => {
+          // Same propagation issue as MapContextMenu: stop the click from
+          // reaching Leaflet's map click listener before it closes the menu.
+          e.stopPropagation()
+          e.preventDefault()
+          onDelete(menu.id, menu.name)
+          onClose()
+        }}
+      >
+        Delete intersection
       </button>
     </div>
   )
@@ -249,16 +295,27 @@ export function SignalMap(props: {
   selected: string | null
   onSelect: (id: string) => void
   onCreateAt: (lat: number, lon: number) => void
+  onDeleteIntersection: (id: string, name: string) => void
   pickMode?: boolean
   onPick?: (lat: number, lon: number) => void
   onCancelPick?: () => void
 }) {
-  const { stream, selected, onSelect, onCreateAt, pickMode, onPick, onCancelPick } = props
+  const {
+    stream,
+    selected,
+    onSelect,
+    onCreateAt,
+    onDeleteIntersection,
+    pickMode,
+    onPick,
+    onCancelPick,
+  } = props
   const located = stream.intersections.filter(
     (i) => i.lat != null && i.lon != null,
   )
   const points = located.map((i) => [i.lat!, i.lon!] as [number, number])
   const center: [number, number] = points[0] ?? [40.75, -73.99]
+  const [markerMenu, setMarkerMenu] = useState<MarkerMenuState | null>(null)
 
   return (
     <MapContainer
@@ -272,7 +329,18 @@ export function SignalMap(props: {
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds points={points} />
-      <MapContextMenu onCreateAt={onCreateAt} disabled={pickMode} />
+      <MapContextMenu
+        onCreateAt={onCreateAt}
+        disabled={pickMode}
+        onInteraction={() => setMarkerMenu(null)}
+      />
+      {markerMenu && (
+        <MarkerContextMenu
+          menu={markerMenu}
+          onClose={() => setMarkerMenu(null)}
+          onDelete={onDeleteIntersection}
+        />
+      )}
       {pickMode && onPick && (
         <DropPin onConfirm={onPick} onCancel={() => onCancelPick?.()} />
       )}
@@ -288,7 +356,20 @@ export function SignalMap(props: {
               iconAnchor: [60, 32],
               html: markerHtml(ix, snap, selected === ix.id),
             })}
-            eventHandlers={{ click: () => (pickMode ? undefined : onSelect(ix.id)) }}
+            eventHandlers={{
+              click: () => (pickMode ? undefined : onSelect(ix.id)),
+              contextmenu: (e) => {
+                if (pickMode) return
+                e.originalEvent.preventDefault()
+                e.originalEvent.stopPropagation()
+                setMarkerMenu({
+                  x: e.containerPoint.x,
+                  y: e.containerPoint.y,
+                  id: ix.id,
+                  name: ix.name,
+                })
+              },
+            }}
           />
         )
       })}
