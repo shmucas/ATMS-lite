@@ -1,3 +1,11 @@
 [
-  {"id": "bench-2070", "name": "East Paces Ferry Rd NE @ Lenox Rd NE", "host": "10.42.0.2", "port": 161, "lat": 33.8479, "lon": -84.3627}
+  {
+    "id": "bench-2070",
+    "name": "East Paces Ferry Rd NE @ Lenox Rd NE",
+    "host": "10.42.0.2",
+    "port": 161,
+    "lat": 33.8454156104391,
+    "lon": -84.35846149921419,
+    "device_type": "maxtime"
+  }
 ]
