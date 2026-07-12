@@ -1,0 +1,7 @@
+# Backend and emulator both run on 3.12 (see Dockerfiles).
+target-version = "py312"
+
+[lint]
+# Defaults (E4/E7/E9/F) plus warnings; enough to catch real defects without
+# restyling the codebase.
+extend-select = ["W"]

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import router
-from .config import CORS_ORIGINS, POLL_HZ, ROOT, load_intersections
+from .config import AUDIT_LOG_PATH, CORS_ORIGINS, POLL_HZ, load_intersections
 from .control import AuditLog
 from .registry import start_intersection
 from .state import Hub
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     app.state.controllers = {}
     app.state.unsupported = {}
     app.state.tasks = {}
-    app.state.audit = AuditLog(ROOT / 'docs' / 'backups' / 'control-audit.jsonl')
+    app.state.audit = AuditLog(AUDIT_LOG_PATH)
     app.state.poll_hz = POLL_HZ
     for cfg in load_intersections():
         start_intersection(app, cfg)

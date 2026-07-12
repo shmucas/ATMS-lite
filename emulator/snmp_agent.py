@@ -302,5 +302,6 @@ class _Protocol(asyncio.DatagramProtocol):
 
 async def serve(agent, host='0.0.0.0', port=161):
     loop = asyncio.get_running_loop()
-    await loop.create_datagram_endpoint(
+    transport, _ = await loop.create_datagram_endpoint(
         lambda: _Protocol(agent), local_addr=(host, port))
+    return transport

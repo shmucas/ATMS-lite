@@ -150,14 +150,14 @@ def build_rings(ring_by_phase, concurrency_by_phase):
 
     merged = []
     for members in groups:
-        placed = False
-        for barrier in merged:
-            if barrier & members:
-                barrier |= members
-                placed = True
-                break
-        if not placed:
-            merged.append(set(members))
+        members = set(members)
+        # Merge every overlapping barrier, not just the first: a later group
+        # can bridge two barriers that looked disjoint when first seen.
+        overlapping = [b for b in merged if b & members]
+        for barrier in overlapping:
+            members |= barrier
+            merged.remove(barrier)
+        merged.append(members)
 
     barriers = [sorted(b) for b in merged]
     barriers.sort(key=lambda b: b[0] if b else 0)

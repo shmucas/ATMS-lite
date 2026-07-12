@@ -45,6 +45,9 @@ ARM_TIMEOUT_S = float(ENV.get('ATMS_ARM_TIMEOUT_S', '300'))
 INTERSECTIONS_PATH = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',
                                           ROOT / 'backend' / 'intersections.json'))
 
+AUDIT_LOG_PATH = pathlib.Path(ENV.get(
+    'ATMS_AUDIT_LOG', ROOT / 'docs' / 'backups' / 'control-audit.jsonl'))
+
 # Device APIs the backend actually knows how to poll/control. Any other value
 # can be stored (so the UI can save the intersection) but no poller starts.
 SUPPORTED_DEVICE_TYPES = {'maxtime'}

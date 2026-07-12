@@ -3,8 +3,10 @@
 import asyncio
 import re
 import secrets
+from typing import Literal
 
-from fastapi import APIRouter, Body, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request
+from pydantic import BaseModel, Field, StrictInt
 
 from .config import (CONTROL_TOKEN, SUPPORTED_DEVICE_TYPES,
                      normalize_intersection, normalize_movements,
@@ -13,6 +15,42 @@ from .control import ControlError
 from .registry import start_intersection, stop_intersection
 
 router = APIRouter()
+
+
+# Request bodies. StrictInt matters on phase: JSON true would otherwise pass
+# an isinstance(int) check because bool subclasses int. lat/lon are strict so
+# a string can never reach the frontend, where it would crash toFixed().
+class PhaseBody(BaseModel):
+    phase: StrictInt = Field(ge=1)
+    on: bool = True
+
+
+class CallBody(PhaseBody):
+    kind: Literal['veh', 'ped'] = 'veh'
+
+
+class IntersectionCreate(BaseModel):
+    name: str
+    host: str
+    id: str | None = None
+    port: StrictInt | None = Field(default=None, ge=1, le=65535)
+    device_type: str = 'maxtime'
+    lat: float | None = Field(default=None, strict=True)
+    lon: float | None = Field(default=None, strict=True)
+    poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
+    movements: list | None = None
+
+
+class IntersectionUpdate(BaseModel):
+    name: str | None = None
+    host: str | None = None
+    id: None = None  # ids are permanent; reject attempts to change one
+    port: StrictInt | None = Field(default=None, ge=1, le=65535)
+    device_type: str | None = None
+    lat: float | None = Field(default=None, strict=True)
+    lon: float | None = Field(default=None, strict=True)
+    poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
+    movements: list | None = None
 
 _SLUG_RE = re.compile(r'[^a-z0-9]+')
 
@@ -154,47 +192,34 @@ async def disarm(iid: str, request: Request,
 
 
 @router.post('/api/intersections/{iid}/call')
-async def place_call(iid: str, request: Request, body: dict = Body(...),
+async def place_call(iid: str, request: Request, body: CallBody,
                      x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
     controller = _controller(request, iid)
-    kind = body.get('kind', 'veh')
-    phase = body.get('phase')
-    on = bool(body.get('on', True))
-    if not isinstance(phase, int):
-        raise HTTPException(422, 'phase must be an integer')
     try:
-        return await controller.place_call(kind, phase, on)
+        return await controller.place_call(body.kind, body.phase, body.on)
     except ControlError as exc:
         raise HTTPException(409, str(exc))
 
 
 @router.post('/api/intersections/{iid}/hold')
-async def hold_phase(iid: str, request: Request, body: dict = Body(...),
+async def hold_phase(iid: str, request: Request, body: PhaseBody,
                      x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
     controller = _controller(request, iid)
-    phase = body.get('phase')
-    on = bool(body.get('on', True))
-    if not isinstance(phase, int):
-        raise HTTPException(422, 'phase must be an integer')
     try:
-        return await controller.hold_phase(phase, on)
+        return await controller.hold_phase(body.phase, body.on)
     except ControlError as exc:
         raise HTTPException(409, str(exc))
 
 
 @router.post('/api/intersections/{iid}/force')
-async def force_phase(iid: str, request: Request, body: dict = Body(...),
+async def force_phase(iid: str, request: Request, body: PhaseBody,
                       x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
     controller = _controller(request, iid)
-    phase = body.get('phase')
-    on = bool(body.get('on', True))
-    if not isinstance(phase, int):
-        raise HTTPException(422, 'phase must be an integer')
     try:
-        return await controller.force_phase(phase, on)
+        return await controller.force_phase(body.phase, body.on)
     except ControlError as exc:
         raise HTTPException(409, str(exc))
 
@@ -205,21 +230,20 @@ def audit(request: Request, limit: int = 100):
 
 
 @router.post('/api/intersections')
-async def create_intersection(request: Request, body: dict = Body(...),
+async def create_intersection(request: Request, body: IntersectionCreate,
                               x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
-    name = (body.get('name') or '').strip()
-    host = (body.get('host') or '').strip()
+    name = body.name.strip()
+    host = body.host.strip()
     if not name:
         raise HTTPException(422, 'name is required')
     if not host:
         raise HTTPException(422, 'host is required')
-    device_type = body.get('device_type', 'maxtime')
 
     async with _mutations:
         raw = read_raw_intersections()
         existing_ids = {item['id'] for item in raw}
-        iid = _slugify(body.get('id') or name)
+        iid = _slugify(body.id or name)
         if iid in existing_ids:
             iid = _unique_id(iid, existing_ids)
 
@@ -227,15 +251,15 @@ async def create_intersection(request: Request, body: dict = Body(...),
             'id': iid,
             'name': name,
             'host': host,
-            'port': int(body.get('port') or 161),
-            'device_type': device_type,
-            'lat': body.get('lat'),
-            'lon': body.get('lon'),
+            'port': body.port or 161,
+            'device_type': body.device_type,
+            'lat': body.lat,
+            'lon': body.lon,
         }
-        if body.get('poll_groups'):
-            item['poll_groups'] = int(body['poll_groups'])
-        if 'movements' in body:
-            item['movements'] = normalize_movements(body['movements'])
+        if body.poll_groups:
+            item['poll_groups'] = body.poll_groups
+        if body.movements is not None:
+            item['movements'] = normalize_movements(body.movements)
         cfg = normalize_intersection(item)
 
         raw.append(item)
@@ -248,9 +272,13 @@ async def create_intersection(request: Request, body: dict = Body(...),
 
 
 @router.put('/api/intersections/{iid}')
-async def update_intersection(iid: str, request: Request, body: dict = Body(...),
+async def update_intersection(iid: str, request: Request,
+                              body: IntersectionUpdate,
                               x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
+    # Only fields the client actually sent: lat/lon may be set to null to
+    # unpin, so present-but-None and absent must stay distinguishable.
+    data = body.model_dump(exclude_unset=True)
     async with _mutations:
         raw = read_raw_intersections()
         item = next((i for i in raw if i['id'] == iid), None)
@@ -259,17 +287,18 @@ async def update_intersection(iid: str, request: Request, body: dict = Body(...)
         old_cfg = normalize_intersection(item)
 
         for key in ('name', 'host', 'device_type'):
-            if body.get(key):
-                item[key] = body[key]
+            if data.get(key):
+                item[key] = data[key]
         for key in ('lat', 'lon'):
-            if key in body:
-                item[key] = body[key]
-        if body.get('port'):
-            item['port'] = int(body['port'])
-        if body.get('poll_groups'):
-            item['poll_groups'] = int(body['poll_groups'])
-        if 'movements' in body:
-            item['movements'] = normalize_movements(body['movements'])
+            if key in data:
+                item[key] = data[key]
+        if data.get('port'):
+            item['port'] = data['port']
+        if data.get('poll_groups'):
+            item['poll_groups'] = data['poll_groups']
+        if 'movements' in data:
+            # normalize_movements(None) is [], so movements: null clears.
+            item['movements'] = normalize_movements(data['movements'])
 
         cfg = normalize_intersection(item)
         write_raw_intersections(raw)
