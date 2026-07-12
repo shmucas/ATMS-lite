@@ -1,5 +1,6 @@
 """REST endpoints. The WebSocket stream lands in M3."""
 
+import asyncio
 import re
 import secrets
 
@@ -14,6 +15,17 @@ from .registry import start_intersection, stop_intersection
 router = APIRouter()
 
 _SLUG_RE = re.compile(r'[^a-z0-9]+')
+
+# Serializes every read-modify-write of intersections.json so concurrent
+# create/update/delete requests cannot clobber each other's edits.
+_mutations = asyncio.Lock()
+
+# Changing any of these means we are talking to a different device (or
+# talking to it differently), so the poller must restart. Anything else
+# (name, lat/lon, movements) is cosmetic and updates in place, keeping the
+# live poll stream, MOE window, and any armed control session intact.
+_CONNECTION_KEYS = ('host', 'port', 'device_type', 'read_community',
+                    'write_community', 'poll_groups')
 
 
 def _slugify(name):
@@ -204,30 +216,31 @@ async def create_intersection(request: Request, body: dict = Body(...),
         raise HTTPException(422, 'host is required')
     device_type = body.get('device_type', 'maxtime')
 
-    raw = read_raw_intersections()
-    existing_ids = {item['id'] for item in raw}
-    iid = (body.get('id') or '').strip() or _slugify(name)
-    if iid in existing_ids:
-        iid = _unique_id(iid, existing_ids)
+    async with _mutations:
+        raw = read_raw_intersections()
+        existing_ids = {item['id'] for item in raw}
+        iid = _slugify(body.get('id') or name)
+        if iid in existing_ids:
+            iid = _unique_id(iid, existing_ids)
 
-    item = {
-        'id': iid,
-        'name': name,
-        'host': host,
-        'port': int(body.get('port') or 161),
-        'device_type': device_type,
-        'lat': body.get('lat'),
-        'lon': body.get('lon'),
-    }
-    if body.get('poll_groups'):
-        item['poll_groups'] = int(body['poll_groups'])
-    if 'movements' in body:
-        item['movements'] = normalize_movements(body['movements'])
-    cfg = normalize_intersection(item)
+        item = {
+            'id': iid,
+            'name': name,
+            'host': host,
+            'port': int(body.get('port') or 161),
+            'device_type': device_type,
+            'lat': body.get('lat'),
+            'lon': body.get('lon'),
+        }
+        if body.get('poll_groups'):
+            item['poll_groups'] = int(body['poll_groups'])
+        if 'movements' in body:
+            item['movements'] = normalize_movements(body['movements'])
+        cfg = normalize_intersection(item)
 
-    raw.append(item)
-    write_raw_intersections(raw)
-    start_intersection(request.app, cfg)
+        raw.append(item)
+        write_raw_intersections(raw)
+        start_intersection(request.app, cfg)
 
     summary = _intersection_summary(request.app, cfg)
     request.app.state.hub.publish_intersection_added(summary)
@@ -238,31 +251,43 @@ async def create_intersection(request: Request, body: dict = Body(...),
 async def update_intersection(iid: str, request: Request, body: dict = Body(...),
                               x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
-    raw = read_raw_intersections()
-    item = next((i for i in raw if i['id'] == iid), None)
-    if item is None:
-        raise HTTPException(404, f'unknown intersection {iid}')
+    async with _mutations:
+        raw = read_raw_intersections()
+        item = next((i for i in raw if i['id'] == iid), None)
+        if item is None:
+            raise HTTPException(404, f'unknown intersection {iid}')
+        old_cfg = normalize_intersection(item)
 
-    for key in ('name', 'host', 'device_type'):
-        if body.get(key):
-            item[key] = body[key]
-    for key in ('lat', 'lon'):
-        if key in body:
-            item[key] = body[key]
-    if body.get('port'):
-        item['port'] = int(body['port'])
-    if body.get('poll_groups'):
-        item['poll_groups'] = int(body['poll_groups'])
-    if 'movements' in body:
-        item['movements'] = normalize_movements(body['movements'])
+        for key in ('name', 'host', 'device_type'):
+            if body.get(key):
+                item[key] = body[key]
+        for key in ('lat', 'lon'):
+            if key in body:
+                item[key] = body[key]
+        if body.get('port'):
+            item['port'] = int(body['port'])
+        if body.get('poll_groups'):
+            item['poll_groups'] = int(body['poll_groups'])
+        if 'movements' in body:
+            item['movements'] = normalize_movements(body['movements'])
 
-    cfg = normalize_intersection(item)
-    write_raw_intersections(raw)
+        cfg = normalize_intersection(item)
+        write_raw_intersections(raw)
 
-    await stop_intersection(request.app, iid)
-    start_intersection(request.app, cfg)
+        live_cfg = (poller.cfg if (poller := request.app.state.pollers.get(iid))
+                    else request.app.state.unsupported.get(iid))
+        if live_cfg is None or any(
+                cfg[k] != old_cfg[k] for k in _CONNECTION_KEYS):
+            await stop_intersection(request.app, iid)
+            start_intersection(request.app, cfg)
+            live_cfg = cfg
+        else:
+            # Cosmetic edit: mutate the running poller/controller's shared
+            # cfg dict in place so live polling and control state survive.
+            for key in ('name', 'lat', 'lon', 'movements'):
+                live_cfg[key] = cfg[key]
 
-    summary = _intersection_summary(request.app, cfg)
+        summary = _intersection_summary(request.app, live_cfg)
     request.app.state.hub.publish_intersection_updated(summary)
     return summary
 
@@ -271,12 +296,12 @@ async def update_intersection(iid: str, request: Request, body: dict = Body(...)
 async def delete_intersection(iid: str, request: Request,
                               x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
-    raw = read_raw_intersections()
-    if not any(i['id'] == iid for i in raw):
-        raise HTTPException(404, f'unknown intersection {iid}')
-    raw = [i for i in raw if i['id'] != iid]
-    write_raw_intersections(raw)
-
-    await stop_intersection(request.app, iid)
+    async with _mutations:
+        raw = read_raw_intersections()
+        if not any(i['id'] == iid for i in raw):
+            raise HTTPException(404, f'unknown intersection {iid}')
+        raw = [i for i in raw if i['id'] != iid]
+        write_raw_intersections(raw)
+        await stop_intersection(request.app, iid)
     request.app.state.hub.publish_intersection_removed(iid)
     return {'id': iid, 'deleted': True}

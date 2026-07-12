@@ -36,6 +36,11 @@ CORS_ORIGINS = ENV.get('ATMS_CORS_ORIGINS', 'http://localhost:5173').split(',')
 # deployment that is reachable by others. Reads and the stream stay open.
 CONTROL_TOKEN = ENV.get('ATMS_CONTROL_TOKEN', '').strip()
 
+# An armed intersection auto-disarms (and clears every call it set) after
+# this many seconds. Overridable so the expiry path can be exercised on a
+# bench without waiting out the full window.
+ARM_TIMEOUT_S = float(ENV.get('ATMS_ARM_TIMEOUT_S', '300'))
+
 
 INTERSECTIONS_PATH = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',
                                           ROOT / 'backend' / 'intersections.json'))
@@ -111,16 +116,28 @@ def normalize_intersection(item):
     }
 
 
+def _read_intersections_file():
+    if not INTERSECTIONS_PATH.exists():
+        return []
+    try:
+        return json.loads(INTERSECTIONS_PATH.read_text())
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f'{INTERSECTIONS_PATH} is not valid JSON ({exc}). Fix or delete '
+            'the file; the backend will not guess at a corrupt config.') from exc
+
+
 def load_intersections():
-    items = json.loads(INTERSECTIONS_PATH.read_text())
-    return [normalize_intersection(item) for item in items]
+    return [normalize_intersection(item) for item in _read_intersections_file()]
 
 
 def read_raw_intersections():
-    if not INTERSECTIONS_PATH.exists():
-        return []
-    return json.loads(INTERSECTIONS_PATH.read_text())
+    return _read_intersections_file()
 
 
 def write_raw_intersections(items):
-    INTERSECTIONS_PATH.write_text(json.dumps(items, indent=2) + '\n')
+    """Atomic write: a crash mid-save must never leave a half-written
+    intersections.json, since the backend refuses to boot on corrupt JSON."""
+    tmp = INTERSECTIONS_PATH.with_name(INTERSECTIONS_PATH.name + '.tmp')
+    tmp.write_text(json.dumps(items, indent=2) + '\n')
+    os.replace(tmp, INTERSECTIONS_PATH)

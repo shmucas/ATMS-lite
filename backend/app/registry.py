@@ -43,5 +43,14 @@ async def stop_intersection(app, iid):
         task.cancel()
         try:
             await task
-        except (asyncio.CancelledError, Exception):
+        except asyncio.CancelledError:
             pass
+        except Exception:
+            log.exception('[%s] poller task raised during stop', iid)
+    # Drop every trace from the hub, or deleted intersections keep riding
+    # the hello payload to every new WebSocket client.
+    hub = app.state.hub
+    hub.latest.pop(iid, None)
+    hub.static.pop(iid, None)
+    hub.control.pop(iid, None)
+    hub.events.pop(iid, None)

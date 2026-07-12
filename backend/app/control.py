@@ -22,6 +22,7 @@ import logging
 import pathlib
 
 from . import ntcip
+from .config import ARM_TIMEOUT_S
 from .snmp import SnmpError
 
 log = logging.getLogger('atms.control')
@@ -31,7 +32,6 @@ HOLD_COL = 4
 FORCE_OFF_COL = 5
 VEH_CALL_COL = 6
 PED_CALL_COL = 7
-ARM_TIMEOUT_S = 300  # an armed intersection auto-disarms after 5 minutes
 
 
 def _now():
@@ -56,7 +56,8 @@ class Controller:
         self.hub = hub
         self.audit = audit
         self.armed = False
-        self.armed_until = None
+        self.armed_until = None  # datetime, serialized to ISO in status()
+        self._expiry_task = None
         # Desired call masks, keyed (kind, group) -> bitmask. Source of truth
         # for what we have asked the controller to hold.
         self._veh = {}
@@ -69,7 +70,8 @@ class Controller:
     def status(self):
         return {
             'armed': self.armed,
-            'armed_until': self.armed_until,
+            'armed_until': (self.armed_until.isoformat(timespec='milliseconds')
+                            if self.armed_until else None),
             'veh_calls': dict(self._veh),
             'ped_calls': dict(self._ped),
             'holds': dict(self._hold),
@@ -80,21 +82,49 @@ class Controller:
     def _check_armed(self):
         if not self.armed:
             raise ControlError('intersection is not armed')
-        if self.armed_until and _now() > self.armed_until:
+        if (self.armed_until
+                and datetime.datetime.now(datetime.timezone.utc) > self.armed_until):
             raise ControlError('arm window expired; re-arm to send controls')
+
+    def _cancel_expiry(self):
+        task = self._expiry_task
+        self._expiry_task = None
+        if (task is not None and not task.done()
+                and task is not asyncio.current_task()):
+            task.cancel()
+
+    async def _expire_arm(self):
+        """Runs while armed; at the deadline it disarms, which clears every
+        mask on the controller. Cancelled by re-arm, disarm, and disconnect."""
+        try:
+            await asyncio.sleep(ARM_TIMEOUT_S)
+        except asyncio.CancelledError:
+            return
+        # Detach first so disarm's _cancel_expiry never cancels this task
+        # out from under itself mid-write.
+        self._expiry_task = None
+        if not self.armed:
+            return
+        try:
+            await self.disarm(actor='system', reason='arm window expired')
+        except Exception:
+            log.exception('[%s] auto-disarm at arm expiry failed', self.cfg['id'])
 
     async def arm(self, actor='ui'):
         async with self._lock:
             self.armed = True
-            until = datetime.datetime.now(datetime.timezone.utc) + \
-                datetime.timedelta(seconds=ARM_TIMEOUT_S)
-            self.armed_until = until.isoformat(timespec='milliseconds')
+            self.armed_until = (datetime.datetime.now(datetime.timezone.utc)
+                                + datetime.timedelta(seconds=ARM_TIMEOUT_S))
+            self._cancel_expiry()
+            self._expiry_task = asyncio.create_task(
+                self._expire_arm(), name=f"arm-expiry-{self.cfg['id']}")
             self.audit.write(self.cfg['id'], actor, 'arm', {})
             self._publish()
         return self.status()
 
     async def disarm(self, actor='ui', reason='manual'):
         async with self._lock:
+            self._cancel_expiry()
             await self._clear_all_locked(actor, reason)
             self.armed = False
             self.armed_until = None
@@ -230,6 +260,7 @@ class Controller:
         """Called by the poller when the link drops. Drop arm and desired
         state so a reconnect never silently re-applies stale calls."""
         async with self._lock:
+            self._cancel_expiry()
             if self.armed or self._veh or self._ped or self._hold or self._omit:
                 self.audit.write(self.cfg['id'], 'system', 'auto-disarm',
                                  {'reason': 'controller disconnected'})
@@ -244,8 +275,10 @@ class Controller:
 
     async def shutdown(self):
         async with self._lock:
+            self._cancel_expiry()
             await self._clear_all_locked('system', 'shutdown')
             self.armed = False
+            self.armed_until = None
 
     def _publish(self):
         self.hub.control[self.cfg['id']] = self.status()
