@@ -37,6 +37,16 @@ class Hub:
         self._fanout({'type': 'control',
                       'data': {'intersection_id': intersection_id, **status}})
 
+    def publish_intersection_added(self, summary):
+        self._fanout({'type': 'intersection_added', 'data': summary})
+
+    def publish_intersection_updated(self, summary):
+        self._fanout({'type': 'intersection_updated', 'data': summary})
+
+    def publish_intersection_removed(self, intersection_id):
+        self._fanout({'type': 'intersection_removed',
+                      'data': {'id': intersection_id}})
+
     def _fanout(self, message):
         for queue in list(self._subscribers):
             try:

@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css'
 import { divIcon } from 'leaflet'
-import { useEffect } from 'react'
-import { MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
+import { useEffect, useState } from 'react'
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import type { StreamState } from '../lib/stream'
 import type { Connection, Snapshot } from '../types'
 
@@ -9,6 +9,7 @@ const STATUS: Record<Connection, string> = {
   connected: 'var(--color-online)',
   degraded: 'var(--color-degraded)',
   disconnected: 'var(--color-offline)',
+  unsupported: 'var(--color-ink-3)',
 }
 
 const SIGNAL_HEX: Record<string, string> = {
@@ -67,6 +68,167 @@ function markerHtml(
     </div>`
 }
 
+interface MenuState {
+  x: number
+  y: number
+  lat: number
+  lon: number
+}
+
+function MapContextMenu({
+  onCreateAt,
+  disabled,
+}: {
+  onCreateAt: (lat: number, lon: number) => void
+  disabled?: boolean
+}) {
+  const [menu, setMenu] = useState<MenuState | null>(null)
+
+  const map = useMapEvents({
+    contextmenu(e) {
+      if (disabled) return
+      const point = map.latLngToContainerPoint(e.latlng)
+      setMenu({ x: point.x, y: point.y, lat: e.latlng.lat, lon: e.latlng.lng })
+    },
+    click() {
+      setMenu(null)
+    },
+    movestart() {
+      setMenu(null)
+    },
+    zoomstart() {
+      setMenu(null)
+    },
+  })
+
+  if (!menu) return null
+
+  return (
+    <div
+      className="absolute z-[900] min-w-[180px] rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-panel)] py-1 text-sm shadow-xl"
+      style={{ left: menu.x, top: menu.y }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        className="block w-full px-3.5 py-2 text-left text-[var(--color-ink)] hover:bg-[var(--color-panel-2)]"
+        onMouseDown={(e) => {
+          // Leaflet's own "click" listener sits on the map container between
+          // this button and the document root, so it fires (and closes the
+          // menu) before a React onClick handler here ever runs. Stopping
+          // propagation on mousedown keeps the event from reaching it.
+          e.stopPropagation()
+          e.preventDefault()
+          onCreateAt(menu.lat, menu.lon)
+          setMenu(null)
+        }}
+      >
+        Create intersection here
+      </button>
+    </div>
+  )
+}
+
+const DROP_PIN_ICON = divIcon({
+  className: '',
+  iconSize: [36, 42],
+  iconAnchor: [18, 40],
+  html: `
+    <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M12 2C7.6 2 4 5.6 4 10c0 5.6 6.8 11.2 7.1 11.4a1.5 1.5 0 0 0 1.8 0C13.2 21.2 20 15.6 20 10c0-4.4-3.6-8-8-8Z"
+        fill="var(--color-accent)"
+        stroke="#0d141e"
+        stroke-width="1.5"
+      />
+      <circle cx="12" cy="10" r="3" fill="#0d141e" />
+    </svg>`,
+})
+
+/* Drop a pin: as soon as pick mode starts, a ghost pin tracks the cursor
+   over the map. Clicking drops it as a real marker at that spot, which the
+   user can then drag to fine-tune before confirming. */
+function DropPin({
+  onConfirm,
+  onCancel,
+}: {
+  onConfirm: (lat: number, lon: number) => void
+  onCancel: () => void
+}) {
+  const [hover, setHover] = useState<{ x: number; y: number } | null>(null)
+  const [placed, setPlaced] = useState<{ lat: number; lng: number } | null>(null)
+
+  useMapEvents({
+    mousemove(e) {
+      if (placed) return
+      const point = e.containerPoint
+      setHover({ x: point.x, y: point.y })
+    },
+    mouseout() {
+      setHover(null)
+    },
+    click(e) {
+      if (placed) return
+      setPlaced({ lat: e.latlng.lat, lng: e.latlng.lng })
+      setHover(null)
+    },
+  })
+
+  return (
+    <>
+      {!placed && hover && (
+        <div
+          className="pointer-events-none absolute z-[850]"
+          style={{ left: hover.x, top: hover.y, transform: 'translate(-18px, -40px)' }}
+        >
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" opacity={0.85}>
+            <path
+              d="M12 2C7.6 2 4 5.6 4 10c0 5.6 6.8 11.2 7.1 11.4a1.5 1.5 0 0 0 1.8 0C13.2 21.2 20 15.6 20 10c0-4.4-3.6-8-8-8Z"
+              fill="var(--color-accent)"
+              stroke="#0d141e"
+              strokeWidth="1.5"
+            />
+            <circle cx="12" cy="10" r="3" fill="#0d141e" />
+          </svg>
+        </div>
+      )}
+      {placed && (
+        <Marker
+          position={placed}
+          icon={DROP_PIN_ICON}
+          draggable
+          eventHandlers={{
+            dragend: (e) => setPlaced(e.target.getLatLng()),
+          }}
+        />
+      )}
+      <div className="absolute inset-x-0 top-3 z-[900] flex justify-center">
+        <div className="flex items-center gap-2 rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-panel)] px-3 py-2 text-xs shadow-xl">
+          <span className="text-[var(--color-ink-2)]">
+            {placed ? 'Drag the pin to fine-tune it' : 'Click the map to drop the pin'}
+          </span>
+          {placed && (
+            <button
+              type="button"
+              className="rounded-md bg-[var(--color-accent)] px-3 py-1.5 font-semibold text-black hover:brightness-110"
+              onClick={() => onConfirm(placed.lat, placed.lng)}
+            >
+              Place pin here
+            </button>
+          )}
+          <button
+            type="button"
+            className="rounded-md border border-[var(--color-line-strong)] px-3 py-1.5 font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
+  )
+}
+
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap()
   useEffect(() => {
@@ -86,8 +248,12 @@ export function SignalMap(props: {
   stream: StreamState
   selected: string | null
   onSelect: (id: string) => void
+  onCreateAt: (lat: number, lon: number) => void
+  pickMode?: boolean
+  onPick?: (lat: number, lon: number) => void
+  onCancelPick?: () => void
 }) {
-  const { stream, selected, onSelect } = props
+  const { stream, selected, onSelect, onCreateAt, pickMode, onPick, onCancelPick } = props
   const located = stream.intersections.filter(
     (i) => i.lat != null && i.lon != null,
   )
@@ -106,6 +272,10 @@ export function SignalMap(props: {
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds points={points} />
+      <MapContextMenu onCreateAt={onCreateAt} disabled={pickMode} />
+      {pickMode && onPick && (
+        <DropPin onConfirm={onPick} onCancel={() => onCancelPick?.()} />
+      )}
       {located.map((ix) => {
         const snap = stream.snapshots[ix.id]
         return (
@@ -118,7 +288,7 @@ export function SignalMap(props: {
               iconAnchor: [60, 32],
               html: markerHtml(ix, snap, selected === ix.id),
             })}
-            eventHandlers={{ click: () => onSelect(ix.id) }}
+            eventHandlers={{ click: () => (pickMode ? undefined : onSelect(ix.id)) }}
           />
         )
       })}

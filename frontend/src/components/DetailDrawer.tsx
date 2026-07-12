@@ -14,6 +14,7 @@ const STATUS_LABEL: Record<Connection, { text: string; color: string }> = {
   connected: { text: 'Online', color: 'var(--color-online)' },
   degraded: { text: 'Degraded', color: 'var(--color-degraded)' },
   disconnected: { text: 'Offline', color: 'var(--color-offline)' },
+  unsupported: { text: 'Unsupported device', color: 'var(--color-ink-3)' },
 }
 
 function StatusPill({ state }: { state: Connection }) {
@@ -134,8 +135,9 @@ export function DetailDrawer(props: {
   stream: StreamState
   id: string
   onClose: () => void
+  onEdit: () => void
 }) {
-  const { stream, id, onClose } = props
+  const { stream, id, onClose, onEdit } = props
   const info = stream.intersections.find((i) => i.id === id)
   const [tab, setTab] = useState<Tab>('signals')
   if (!info) return null
@@ -164,15 +166,27 @@ export function DetailDrawer(props: {
             {info.static?.sys_descr ?? info.id}
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="shrink-0 rounded-md p-1.5 text-[var(--color-ink-3)] hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
-          aria-label="Close"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={onEdit}
+            className="rounded-md p-1.5 text-[var(--color-ink-3)] hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
+            aria-label="Edit configuration"
+            title="Edit configuration"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1.5 text-[var(--color-ink-3)] hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
+            aria-label="Close"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--color-line)] px-3 pt-2">

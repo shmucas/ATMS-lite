@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DetailDrawer } from './components/DetailDrawer'
+import { draftFromInfo, IntersectionEditor, type EditorTarget } from './components/IntersectionEditor'
 import { SignalMap } from './components/SignalMap'
 import { TopBar } from './components/TopBar'
 import { useAtmsStream } from './lib/stream'
@@ -7,6 +8,8 @@ import { useAtmsStream } from './lib/stream'
 export function App() {
   const stream = useAtmsStream()
   const [selected, setSelected] = useState<string | null>(null)
+  const [editor, setEditor] = useState<EditorTarget | null>(null)
+  const [picking, setPicking] = useState(false)
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -19,7 +22,21 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar stream={stream} />
+      <TopBar
+        stream={stream}
+        onAddIntersection={() => {
+          setPicking(false)
+          setEditor({
+            mode: 'create',
+            name: '',
+            host: '',
+            port: 161,
+            device_type: 'maxtime',
+            lat: null,
+            lon: null,
+          })
+        }}
+      />
 
       {backendDown && (
         <div className="z-[1000] bg-[var(--color-offline)] px-4 py-1.5 text-center text-xs font-semibold text-white">
@@ -29,16 +46,33 @@ export function App() {
 
       <div className="relative flex min-h-0 flex-1">
         <div className="min-w-0 flex-1">
-          {stream.intersections.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-sm text-[var(--color-ink-3)]">
-              Connecting to the traffic network...
+          <SignalMap
+            stream={stream}
+            selected={selected}
+            onSelect={setSelected}
+            onCreateAt={(lat, lon) => {
+              setSelected(null)
+              setEditor({
+                mode: 'create',
+                name: '',
+                host: '',
+                port: 161,
+                device_type: 'maxtime',
+                lat,
+                lon,
+              })
+            }}
+            pickMode={picking}
+            onPick={(lat, lon) => {
+              setPicking(false)
+              setEditor((e) => (e ? { ...e, lat, lon } : e))
+            }}
+            onCancelPick={() => setPicking(false)}
+          />
+          {stream.wsConnected && stream.intersections.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[var(--color-ink-3)]">
+              No intersections yet. Right-click the map to add one.
             </div>
-          ) : (
-            <SignalMap
-              stream={stream}
-              selected={selected}
-              onSelect={setSelected}
-            />
           )}
 
           {/* Map legend, bottom-left, so status reads without opening anything. */}
@@ -57,14 +91,36 @@ export function App() {
           )}
         </div>
 
-        {selected && (
+        {editor ? (
           <div className="absolute inset-y-0 right-0 z-[600] sm:relative">
-            <DetailDrawer
-              stream={stream}
-              id={selected}
-              onClose={() => setSelected(null)}
+            <IntersectionEditor
+              target={editor}
+              onClose={() => {
+                setPicking(false)
+                setEditor(null)
+              }}
+              onSaved={() => {
+                setPicking(false)
+                setEditor(null)
+              }}
+              onPickLocation={() => setPicking(true)}
+              picking={picking}
             />
           </div>
+        ) : (
+          selected && (
+            <div className="absolute inset-y-0 right-0 z-[600] sm:relative">
+              <DetailDrawer
+                stream={stream}
+                id={selected}
+                onClose={() => setSelected(null)}
+                onEdit={() => {
+                  const info = stream.intersections.find((i) => i.id === selected)
+                  if (info) setEditor(draftFromInfo(info))
+                }}
+              />
+            </div>
+          )
         )}
       </div>
     </div>

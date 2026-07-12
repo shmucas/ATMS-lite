@@ -1,6 +1,7 @@
 export type Signal = 'red' | 'yellow' | 'green' | 'dark'
 export type Ped = 'walk' | 'ped_clear' | 'dont_walk' | 'dark'
-export type Connection = 'connected' | 'degraded' | 'disconnected'
+export type Connection = 'connected' | 'degraded' | 'disconnected' | 'unsupported'
+export type DeviceType = 'maxtime' | 'econolite' | 'siemens'
 
 export interface Phase {
   phase: number
@@ -66,6 +67,9 @@ export interface IntersectionInfo {
   lat: number | null
   lon: number | null
   connection: Connection
+  device_type?: DeviceType
+  host?: string
+  port?: number
   static: {
     sys_descr?: string
     controller_max_phases?: number

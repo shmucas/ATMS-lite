@@ -88,6 +88,28 @@ export function useAtmsStream(): StreamState {
             ...s,
             control: { ...s.control, [intersection_id]: rest as ControlState },
           }))
+        } else if (m.type === 'intersection_added') {
+          const info: IntersectionInfo = m.data
+          setState((s) => ({
+            ...s,
+            intersections: s.intersections.some((i) => i.id === info.id)
+              ? s.intersections.map((i) => (i.id === info.id ? info : i))
+              : [...s.intersections, info],
+          }))
+        } else if (m.type === 'intersection_updated') {
+          const info: IntersectionInfo = m.data
+          setState((s) => ({
+            ...s,
+            intersections: s.intersections.map((i) =>
+              i.id === info.id ? info : i,
+            ),
+          }))
+        } else if (m.type === 'intersection_removed') {
+          const { id } = m.data as { id: string }
+          setState((s) => ({
+            ...s,
+            intersections: s.intersections.filter((i) => i.id !== id),
+          }))
         } else if (m.type === 'event') {
           const ev: AtmsEvent = m.data
           const conn = CONNECTION_EVENTS[ev.kind]

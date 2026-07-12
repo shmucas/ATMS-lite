@@ -14,6 +14,7 @@ Rule: no code for milestone N until milestone N-1 is fully tested and functional
 | M7 | Virtual controller emulator (Python NTCIP agent), containerized       | Backend polls the emulator with a config change only, zero code changes       | Complete |
 | M8 | Multi-intersection: compose N virtual + 1 real, dashboard grid/map    | All intersections on one dashboard; killing a container degrades only its tile | Complete (compose written; verified with local emulator processes, container run needs Docker update) |
 | M9 | Hardening: auth, persistence, chaos pass, docs                        | Cable pulls, controller reboots, container kills all recover clean            | Next     |
+| M10 | ATSPM reports menu: high-res event capture from existing polling, Postgres store, real UDOT ATSPM reporting app wired in via compose | User opens "ATSPM Reports" menu, pulls real-time and aggregate reports rendered by the actual ATSPM app | Planned  |
 
 Notes:
 
@@ -21,3 +22,4 @@ Notes:
 - M5: the SNMP write community lives in the local .env. The pre-SET database backup was waived by the project owner on 2026-07-10. The community gets verified at M5 with a harmless SET that rewrites a current value onto itself.
 - Docker Desktop on the dev Mac is outdated (23.0.1) and must be updated before M7.
 - The MaxTime agent is SNMP v1 only. All tooling and backend code must speak v1.
+- M10 (ATSPM reports) decided 2026-07-12: derive high-res events from existing poller data (no separate NTCIP high-res log object assumed available), store in a new Postgres service added to docker-compose, and run the real open-source UDOT ATSPM reporting app against it rather than reimplementing its metrics. Work does not start until M9 is tested and marked Complete.

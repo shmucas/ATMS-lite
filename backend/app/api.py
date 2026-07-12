@@ -1,13 +1,48 @@
 """REST endpoints. The WebSocket stream lands in M3."""
 
+import re
 import secrets
 
 from fastapi import APIRouter, Body, Header, HTTPException, Request
 
-from .config import CONTROL_TOKEN
+from .config import (CONTROL_TOKEN, SUPPORTED_DEVICE_TYPES,
+                     normalize_intersection, read_raw_intersections,
+                     write_raw_intersections)
 from .control import ControlError
+from .registry import start_intersection, stop_intersection
 
 router = APIRouter()
+
+_SLUG_RE = re.compile(r'[^a-z0-9]+')
+
+
+def _slugify(name):
+    slug = _SLUG_RE.sub('-', name.strip().lower()).strip('-')
+    return slug or 'intersection'
+
+
+def _unique_id(base, existing_ids):
+    if base not in existing_ids:
+        return base
+    n = 2
+    while f'{base}-{n}' in existing_ids:
+        n += 1
+    return f'{base}-{n}'
+
+
+def _intersection_summary(app, cfg):
+    poller = app.state.pollers.get(cfg['id'])
+    return {
+        'id': cfg['id'],
+        'name': cfg['name'],
+        'host': cfg['host'],
+        'port': cfg['port'],
+        'device_type': cfg.get('device_type', 'maxtime'),
+        'lat': cfg['lat'],
+        'lon': cfg['lon'],
+        'connection': poller.state if poller else 'unsupported',
+        'static': app.state.hub.static.get(cfg['id']) if poller else None,
+    }
 
 
 def _controller(request, iid):
@@ -33,6 +68,7 @@ def _summary(poller, hub):
         'id': cfg['id'],
         'name': cfg['name'],
         'host': cfg['host'],
+        'device_type': cfg.get('device_type', 'maxtime'),
         'lat': cfg['lat'],
         'lon': cfg['lon'],
         'connection': poller.state,
@@ -47,6 +83,14 @@ def _summary(poller, hub):
 def healthz(request: Request):
     return {'status': 'ok',
             'intersections': len(request.app.state.pollers)}
+
+
+@router.get('/api/device-types')
+def device_types():
+    return {
+        'supported': sorted(SUPPORTED_DEVICE_TYPES),
+        'all': ['maxtime', 'econolite', 'siemens'],
+    }
 
 
 @router.get('/api/intersections')
@@ -114,3 +158,89 @@ async def place_call(iid: str, request: Request, body: dict = Body(...),
 @router.get('/api/audit')
 def audit(request: Request, limit: int = 100):
     return request.app.state.audit.tail(limit)
+
+
+@router.post('/api/intersections')
+async def create_intersection(request: Request, body: dict = Body(...),
+                              x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    name = (body.get('name') or '').strip()
+    host = (body.get('host') or '').strip()
+    if not name:
+        raise HTTPException(422, 'name is required')
+    if not host:
+        raise HTTPException(422, 'host is required')
+    device_type = body.get('device_type', 'maxtime')
+
+    raw = read_raw_intersections()
+    existing_ids = {item['id'] for item in raw}
+    iid = (body.get('id') or '').strip() or _slugify(name)
+    if iid in existing_ids:
+        iid = _unique_id(iid, existing_ids)
+
+    item = {
+        'id': iid,
+        'name': name,
+        'host': host,
+        'port': int(body.get('port') or 161),
+        'device_type': device_type,
+        'lat': body.get('lat'),
+        'lon': body.get('lon'),
+    }
+    if body.get('poll_groups'):
+        item['poll_groups'] = int(body['poll_groups'])
+    cfg = normalize_intersection(item)
+
+    raw.append(item)
+    write_raw_intersections(raw)
+    start_intersection(request.app, cfg)
+
+    summary = _intersection_summary(request.app, cfg)
+    request.app.state.hub.publish_intersection_added(summary)
+    return summary
+
+
+@router.put('/api/intersections/{iid}')
+async def update_intersection(iid: str, request: Request, body: dict = Body(...),
+                              x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    raw = read_raw_intersections()
+    item = next((i for i in raw if i['id'] == iid), None)
+    if item is None:
+        raise HTTPException(404, f'unknown intersection {iid}')
+
+    for key in ('name', 'host', 'device_type'):
+        if body.get(key):
+            item[key] = body[key]
+    for key in ('lat', 'lon'):
+        if key in body:
+            item[key] = body[key]
+    if body.get('port'):
+        item['port'] = int(body['port'])
+    if body.get('poll_groups'):
+        item['poll_groups'] = int(body['poll_groups'])
+
+    cfg = normalize_intersection(item)
+    write_raw_intersections(raw)
+
+    await stop_intersection(request.app, iid)
+    start_intersection(request.app, cfg)
+
+    summary = _intersection_summary(request.app, cfg)
+    request.app.state.hub.publish_intersection_updated(summary)
+    return summary
+
+
+@router.delete('/api/intersections/{iid}')
+async def delete_intersection(iid: str, request: Request,
+                              x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    raw = read_raw_intersections()
+    if not any(i['id'] == iid for i in raw):
+        raise HTTPException(404, f'unknown intersection {iid}')
+    raw = [i for i in raw if i['id'] != iid]
+    write_raw_intersections(raw)
+
+    await stop_intersection(request.app, iid)
+    request.app.state.hub.publish_intersection_removed(iid)
+    return {'id': iid, 'deleted': True}

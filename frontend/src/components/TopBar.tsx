@@ -53,7 +53,13 @@ function Stat(props: { value: number; label: string; color: string }) {
   )
 }
 
-export function TopBar({ stream }: { stream: StreamState }) {
+export function TopBar({
+  stream,
+  onAddIntersection,
+}: {
+  stream: StreamState
+  onAddIntersection: () => void
+}) {
   const ix = stream.intersections
   const online = ix.filter((i) => i.connection === 'connected').length
   const degraded = ix.filter((i) => i.connection === 'degraded').length
@@ -91,6 +97,13 @@ export function TopBar({ stream }: { stream: StreamState }) {
       </div>
 
       <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={onAddIntersection}
+          className="rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]"
+        >
+          + Add intersection
+        </button>
         {weather && (
           <span className="text-xs text-[var(--color-ink-2)]">
             {WEATHER_TEXT[weather.code] ?? ''} · {Math.round(weather.temp)}
