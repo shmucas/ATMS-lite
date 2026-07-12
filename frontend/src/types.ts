@@ -1,6 +1,6 @@
 export type Signal = 'red' | 'yellow' | 'green' | 'dark'
 export type Ped = 'walk' | 'ped_clear' | 'dont_walk' | 'dark'
-export type Connection = 'connected' | 'degraded' | 'disconnected' | 'unsupported'
+export type Connection = 'connected' | 'degraded' | 'disconnected' | 'unsupported' | 'starting'
 export type DeviceType = 'maxtime' | 'econolite' | 'siemens'
 
 export interface Phase {
@@ -61,6 +61,22 @@ export interface AtmsEvent {
   detail: string
 }
 
+export type Approach = 'NB' | 'SB' | 'EB' | 'WB'
+export type LaneKind = 'left' | 'through' | 'right'
+
+/* A lane-use arrow: one or more parallel lanes (left-to-right) that share a
+   phase, drawn as a single map marker rotated to face the direction of
+   travel. */
+export interface Movement {
+  id: string
+  approach: Approach
+  lanes: LaneKind[]
+  phase: number
+  lat: number
+  lon: number
+  heading: number
+}
+
 export interface IntersectionInfo {
   id: string
   name: string
@@ -70,6 +86,7 @@ export interface IntersectionInfo {
   device_type?: DeviceType
   host?: string
   port?: number
+  movements?: Movement[]
   static: {
     sys_descr?: string
     controller_max_phases?: number

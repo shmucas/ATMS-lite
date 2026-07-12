@@ -1,21 +1,31 @@
 import clsx from 'clsx'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { control } from '../lib/control'
 import type { ControlState, StreamState } from '../lib/stream'
-import type { Connection, IntersectionInfo, Snapshot } from '../types'
+import type { Connection, IntersectionInfo, Movement, Snapshot } from '../types'
 import { CoordMonitor } from './CoordMonitor'
+import { IntersectionMiniMap } from './IntersectionMiniMap'
 import { DetectorPanel } from './panels/DetectorPanel'
 import { HealthPanel } from './panels/HealthPanel'
+import { MovementsPanel } from './MovementsPanel'
 import { PhaseStatusTable } from './PhaseStatusTable'
 import { RingDiagram } from './RingDiagram'
 
-type Tab = 'signals' | 'detectors' | 'health'
+type Tab = 'signals' | 'movements' | 'detectors' | 'health'
+
+export interface MovementEditorState {
+  id: string
+  draft: Movement[]
+  saving: boolean
+  error: string | null
+}
 
 const STATUS_LABEL: Record<Connection, { text: string; color: string }> = {
   connected: { text: 'Online', color: 'var(--color-online)' },
   degraded: { text: 'Degraded', color: 'var(--color-degraded)' },
   disconnected: { text: 'Offline', color: 'var(--color-offline)' },
   unsupported: { text: 'Unsupported device', color: 'var(--color-ink-3)' },
+  starting: { text: 'Starting', color: 'var(--color-ink-3)' },
 }
 
 function StatusPill({ state }: { state: Connection }) {
@@ -76,6 +86,14 @@ function SignalsTab(props: {
 
   return (
     <div className="space-y-5">
+      {info.lat != null && info.lon != null && (info.movements?.length ?? 0) > 0 && (
+        <IntersectionMiniMap
+          lat={info.lat}
+          lon={info.lon}
+          movements={info.movements ?? []}
+          snapshot={snapshot}
+        />
+      )}
       <PhaseStatusTable snapshot={snapshot} />
       <RingDiagram
         snapshot={snapshot}
@@ -200,18 +218,50 @@ export function DetailDrawer(props: {
   id: string
   onClose: () => void
   onEdit: () => void
+  movementEditor: MovementEditorState | null
+  onActivateMovements: (info: IntersectionInfo) => void
+  onDeactivateMovements: () => void
+  onChangeMovementsDraft: (items: Movement[]) => void
+  onSaveMovements: () => void
 }) {
-  const { stream, id, onClose, onEdit } = props
+  const {
+    stream,
+    id,
+    onClose,
+    onEdit,
+    movementEditor,
+    onActivateMovements,
+    onDeactivateMovements,
+    onChangeMovementsDraft,
+    onSaveMovements,
+  } = props
   const info = stream.intersections.find((i) => i.id === id)
   const [tab, setTab] = useState<Tab>('signals')
+
+  // Movements draft lives in App (not local state) so a Save can be
+  // confirmed even if the drawer re-renders; only active while this tab
+  // is mounted.
+  useEffect(() => {
+    if (tab !== 'movements' || !info) return
+    onActivateMovements(info)
+    return () => onDeactivateMovements()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, id])
+
   if (!info) return null
   const snapshot = stream.snapshots[id]
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'signals', label: 'Signals' },
+    { id: 'movements', label: 'Movements' },
     { id: 'detectors', label: 'Detectors' },
     { id: 'health', label: 'Health' },
   ]
+
+  const savedMovements = info.movements ?? []
+  const dirty =
+    !!movementEditor &&
+    JSON.stringify(movementEditor.draft) !== JSON.stringify(savedMovements)
 
   return (
     <aside className="flex h-full w-full flex-col border-l border-[var(--color-line)] bg-[var(--color-panel)] sm:w-[440px]">
@@ -278,6 +328,20 @@ export function DetailDrawer(props: {
             control={stream.control[id]}
           />
         )}
+        {tab === 'movements' &&
+          (movementEditor && movementEditor.id === info.id ? (
+            <MovementsPanel
+              info={info}
+              snapshot={snapshot}
+              draft={movementEditor.draft}
+              onChangeDraft={onChangeMovementsDraft}
+              onSave={onSaveMovements}
+              onDiscard={() => onChangeMovementsDraft(savedMovements)}
+              dirty={dirty}
+              saving={movementEditor.saving}
+              error={movementEditor.error}
+            />
+          ) : null)}
         {tab === 'detectors' && <DetectorPanel snapshot={snapshot} />}
         {tab === 'health' && (
           <HealthPanel info={info} snapshot={snapshot} stream={stream} />

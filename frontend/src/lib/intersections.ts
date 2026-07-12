@@ -1,4 +1,4 @@
-import type { DeviceType } from '../types'
+import type { DeviceType, Movement } from '../types'
 
 const TOKEN = import.meta.env.VITE_CONTROL_TOKEN ?? ''
 
@@ -39,6 +39,8 @@ export const intersectionsApi = {
   update: (id: string, draft: IntersectionDraft) =>
     request('PUT', `/api/intersections/${id}`, draft),
   remove: (id: string) => request('DELETE', `/api/intersections/${id}`),
+  updateMovements: (id: string, movements: Movement[]) =>
+    request('PUT', `/api/intersections/${id}`, { movements }),
   deviceTypes: (): Promise<{ supported: DeviceType[]; all: DeviceType[] }> =>
     request('GET', '/api/device-types'),
 }

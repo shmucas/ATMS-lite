@@ -33,6 +33,7 @@ const CONNECTION_STYLES: Record<Connection, string> = {
   degraded: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
   disconnected: 'bg-red-500/15 text-red-400 border-red-500/30',
   unsupported: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+  starting: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
 }
 
 export function ConnectionBadge(props: { state: Connection }) {

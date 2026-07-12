@@ -6,6 +6,25 @@
     "port": 161,
     "lat": 33.8454156104391,
     "lon": -84.35846149921419,
-    "device_type": "maxtime"
+    "device_type": "maxtime",
+    "movements": [
+      { "id": "nb-left", "approach": "NB", "lanes": ["left"], "phase": 5, "lat": 33.8451461, "lon": -84.3584994, "heading": 0 },
+      { "id": "nb-through", "approach": "NB", "lanes": ["through", "through"], "phase": 2, "lat": 33.8451461, "lon": -84.3584236, "heading": 0 },
+      { "id": "sb-left", "approach": "SB", "lanes": ["left"], "phase": 1, "lat": 33.8456851, "lon": -84.3584236, "heading": 180 },
+      { "id": "sb-through", "approach": "SB", "lanes": ["through", "through"], "phase": 6, "lat": 33.8456851, "lon": -84.3584994, "heading": 180 },
+      { "id": "eb-left", "approach": "EB", "lanes": ["left"], "phase": 7, "lat": 33.8454471, "lon": -84.358786, "heading": 90 },
+      { "id": "eb-through-right", "approach": "EB", "lanes": ["through", "right"], "phase": 4, "lat": 33.8453842, "lon": -84.358786, "heading": 90 },
+      { "id": "wb-left", "approach": "WB", "lanes": ["left"], "phase": 3, "lat": 33.8453842, "lon": -84.358137, "heading": 270 },
+      { "id": "wb-through-right", "approach": "WB", "lanes": ["through", "right"], "phase": 8, "lat": 33.8454471, "lon": -84.358137, "heading": 270 }
+    ]
+  },
+  {
+    "id": "peachtree-rd-lenox-rd",
+    "name": "Peachtree Rd @ Lenox Rd",
+    "host": "127.0.0.1",
+    "port": 1161,
+    "device_type": "maxtime",
+    "lat": 33.85045895313795,
+    "lon": -84.36201810836792
   }
 ]

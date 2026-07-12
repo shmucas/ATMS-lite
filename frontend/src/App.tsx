@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { DetailDrawer } from './components/DetailDrawer'
+import { DetailDrawer, type MovementEditorState } from './components/DetailDrawer'
 import { draftFromInfo, IntersectionEditor, type EditorTarget } from './components/IntersectionEditor'
 import { SignalMap } from './components/SignalMap'
 import { TopBar } from './components/TopBar'
 import { intersectionsApi } from './lib/intersections'
 import { useAtmsStream } from './lib/stream'
+import type { IntersectionInfo, Movement } from './types'
 
 export function App() {
   const stream = useAtmsStream()
   const [selected, setSelected] = useState<string | null>(null)
   const [editor, setEditor] = useState<EditorTarget | null>(null)
   const [picking, setPicking] = useState(false)
+  const [movementEditor, setMovementEditor] = useState<MovementEditorState | null>(null)
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -30,6 +32,32 @@ export function App() {
       if (editor?.id === id) setEditor(null)
     } catch (e) {
       window.alert(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  const activateMovements = (info: IntersectionInfo) => {
+    setMovementEditor((prev) =>
+      prev?.id === info.id
+        ? prev
+        : { id: info.id, draft: info.movements ?? [], saving: false, error: null },
+    )
+  }
+
+  const deactivateMovements = () => setMovementEditor(null)
+
+  const changeMovementsDraft = (items: Movement[]) =>
+    setMovementEditor((prev) => (prev ? { ...prev, draft: items, error: null } : prev))
+
+  const saveMovements = async () => {
+    if (!movementEditor) return
+    setMovementEditor((prev) => (prev ? { ...prev, saving: true, error: null } : prev))
+    try {
+      await intersectionsApi.updateMovements(movementEditor.id, movementEditor.draft)
+      setMovementEditor((prev) => (prev ? { ...prev, saving: false } : prev))
+    } catch (e) {
+      setMovementEditor((prev) =>
+        prev ? { ...prev, saving: false, error: e instanceof Error ? e.message : String(e) } : prev,
+      )
     }
   }
 
@@ -170,6 +198,11 @@ export function App() {
                   const info = stream.intersections.find((i) => i.id === selected)
                   if (info) setEditor(draftFromInfo(info))
                 }}
+                movementEditor={movementEditor}
+                onActivateMovements={activateMovements}
+                onDeactivateMovements={deactivateMovements}
+                onChangeMovementsDraft={changeMovementsDraft}
+                onSaveMovements={saveMovements}
               />
             </div>
           )

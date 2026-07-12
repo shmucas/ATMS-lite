@@ -6,8 +6,8 @@ import secrets
 from fastapi import APIRouter, Body, Header, HTTPException, Request
 
 from .config import (CONTROL_TOKEN, SUPPORTED_DEVICE_TYPES,
-                     normalize_intersection, read_raw_intersections,
-                     write_raw_intersections)
+                     normalize_intersection, normalize_movements,
+                     read_raw_intersections, write_raw_intersections)
 from .control import ControlError
 from .registry import start_intersection, stop_intersection
 
@@ -40,6 +40,7 @@ def _intersection_summary(app, cfg):
         'device_type': cfg.get('device_type', 'maxtime'),
         'lat': cfg['lat'],
         'lon': cfg['lon'],
+        'movements': cfg.get('movements', []),
         'connection': poller.state if poller else 'unsupported',
         'static': app.state.hub.static.get(cfg['id']) if poller else None,
     }
@@ -71,6 +72,7 @@ def _summary(poller, hub):
         'device_type': cfg.get('device_type', 'maxtime'),
         'lat': cfg['lat'],
         'lon': cfg['lon'],
+        'movements': cfg.get('movements', []),
         'connection': poller.state,
         'poll_latency_ms': poller.last_latency_ms,
         'last_seq': latest['seq'] if latest else None,
@@ -219,6 +221,8 @@ async def create_intersection(request: Request, body: dict = Body(...),
     }
     if body.get('poll_groups'):
         item['poll_groups'] = int(body['poll_groups'])
+    if 'movements' in body:
+        item['movements'] = normalize_movements(body['movements'])
     cfg = normalize_intersection(item)
 
     raw.append(item)
@@ -249,6 +253,8 @@ async def update_intersection(iid: str, request: Request, body: dict = Body(...)
         item['port'] = int(body['port'])
     if body.get('poll_groups'):
         item['poll_groups'] = int(body['poll_groups'])
+    if 'movements' in body:
+        item['movements'] = normalize_movements(body['movements'])
 
     cfg = normalize_intersection(item)
     write_raw_intersections(raw)

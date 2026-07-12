@@ -44,6 +44,48 @@ INTERSECTIONS_PATH = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',
 # can be stored (so the UI can save the intersection) but no poller starts.
 SUPPORTED_DEVICE_TYPES = {'maxtime'}
 
+APPROACHES = {'NB', 'SB', 'EB', 'WB'}
+LANE_KINDS = {'left', 'through', 'right'}
+
+
+def normalize_movements(raw):
+    """Sanitize the lane-arrow list from a client payload. Silently drops
+    malformed entries rather than rejecting the whole request - a bad
+    movement shouldn't block saving the rest of the intersection."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for m in raw:
+        if not isinstance(m, dict):
+            continue
+        approach = m.get('approach')
+        lanes = m.get('lanes')
+        if approach not in APPROACHES:
+            continue
+        if not isinstance(lanes, list) or not lanes:
+            continue
+        if not all(lane in LANE_KINDS for lane in lanes):
+            continue
+        try:
+            phase = int(m['phase'])
+            lat = float(m['lat'])
+            lon = float(m['lon'])
+            heading = float(m.get('heading', 0)) % 360
+        except (KeyError, TypeError, ValueError):
+            continue
+        if phase < 1:
+            continue
+        out.append({
+            'id': str(m.get('id') or f'{approach.lower()}-{len(out)}'),
+            'approach': approach,
+            'lanes': lanes,
+            'phase': phase,
+            'lat': lat,
+            'lon': lon,
+            'heading': heading,
+        })
+    return out
+
 
 def normalize_intersection(item):
     return {
@@ -63,6 +105,9 @@ def normalize_intersection(item):
         # reports 5 groups (40 phases) but a typical intersection uses
         # phases 1-8, so 2 groups is plenty and keeps the PDU small.
         'poll_groups': int(item.get('poll_groups', 2)),
+        # Lane-use arrows (left/through/right per approach) mapped to the
+        # signal phase that serves them, for the map overlay.
+        'movements': normalize_movements(item.get('movements', [])),
     }
 
 

@@ -10,6 +10,7 @@ const STATUS: Record<Connection, string> = {
   degraded: 'var(--color-degraded)',
   disconnected: 'var(--color-offline)',
   unsupported: 'var(--color-ink-3)',
+  starting: 'var(--color-ink-3)',
 }
 
 const SIGNAL_HEX: Record<string, string> = {

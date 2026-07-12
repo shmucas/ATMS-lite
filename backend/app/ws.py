@@ -38,6 +38,7 @@ async def stream(ws: WebSocket):
                  'lat': p.cfg['lat'], 'lon': p.cfg['lon'],
                  'host': p.cfg['host'], 'port': p.cfg['port'],
                  'device_type': p.cfg.get('device_type', 'maxtime'),
+                 'movements': p.cfg.get('movements', []),
                  'connection': p.state,
                  'static': hub.static.get(p.cfg['id'])}
                 for p in pollers.values()
@@ -46,6 +47,7 @@ async def stream(ws: WebSocket):
                  'lat': cfg['lat'], 'lon': cfg['lon'],
                  'host': cfg['host'], 'port': cfg['port'],
                  'device_type': cfg.get('device_type', 'maxtime'),
+                 'movements': cfg.get('movements', []),
                  'connection': 'unsupported', 'static': None}
                 for cfg in ws.app.state.unsupported.values()
             ],
