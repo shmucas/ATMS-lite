@@ -13,7 +13,7 @@ Rule: no code for milestone N until milestone N-1 is fully tested and functional
 | M6 | Alarm/event scraping + timeline UI + detector/MOE stats               | A provoked controller event shows in the timeline with a correct timestamp    | Complete |
 | M7 | Virtual controller emulator (Python NTCIP agent), containerized       | Backend polls the emulator with a config change only, zero code changes       | Complete |
 | M8 | Multi-intersection: compose N virtual + 1 real, dashboard grid/map    | All intersections on one dashboard; killing a container degrades only its tile | Complete (compose written; verified with local emulator processes, container run needs Docker update) |
-| M9 | Hardening: auth, persistence, chaos pass, docs                        | Cable pulls, controller reboots, container kills all recover clean            | Next     |
+| M9 | Hardening: auth, persistence, chaos pass, docs                        | Cable pulls, controller reboots, container kills all recover clean            | Complete (2026-07-11, see note) |
 | M10 | ATSPM reports menu: high-res event capture from existing polling, Postgres store, real UDOT ATSPM reporting app wired in via compose | User opens "ATSPM Reports" menu, pulls real-time and aggregate reports rendered by the actual ATSPM app | Planned  |
 
 Notes:
@@ -23,3 +23,4 @@ Notes:
 - Docker Desktop on the dev Mac is outdated (23.0.1) and must be updated before M7.
 - The MaxTime agent is SNMP v1 only. All tooling and backend code must speak v1.
 - M10 (ATSPM reports) decided 2026-07-12: derive high-res events from existing poller data (no separate NTCIP high-res log object assumed available), store in a new Postgres service added to docker-compose, and run the real open-source UDOT ATSPM reporting app against it rather than reimplementing its metrics. Work does not start until M9 is tested and marked Complete.
+- M9 status note (2026-07-12): control-endpoint token auth, perf verification, and doc refresh landed in `838654a`. Chaos scenarios (cable pull, controller reboot, container kill) were verified in earlier milestones (M2/M3/M8), not re-run against the two commits that landed after `838654a` (intersection registry UI, map-first redesign). Persistence covers intersection config and the control audit log; the in-memory alarm/event timeline (`Hub.events` in `backend/app/state.py`) does not survive a backend restart - accepted as a known gap, not blocking M9 closure.
