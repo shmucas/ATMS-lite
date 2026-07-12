@@ -75,15 +75,27 @@ export function App() {
             </div>
           )}
 
-          {/* Map legend, bottom-left, so status reads without opening anything. */}
+          {/* Map legend, bottom-center, so status reads without opening anything. */}
           {stream.intersections.length > 0 && (
-            <div className="pointer-events-none absolute bottom-4 left-4 z-[500] flex flex-col gap-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-2 text-[11px] text-[var(--color-ink-2)] backdrop-blur">
-              <div className="mb-0.5 font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
-                Comms
-              </div>
-              <Legend color="var(--color-online)" label="Online" />
-              <Legend color="var(--color-degraded)" label="Degraded" />
-              <Legend color="var(--color-offline)" label="Offline" />
+            <div className="pointer-events-none absolute bottom-4 left-1/2 z-[500] flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-2 text-[11px] text-[var(--color-ink-2)] backdrop-blur">
+              <Legend
+                color="var(--color-online)"
+                label="Online"
+                count={
+                  stream.intersections.filter(
+                    (i) => i.connection === 'connected' || i.connection === 'degraded',
+                  ).length
+                }
+              />
+              <Legend
+                color="var(--color-offline)"
+                label="Offline"
+                count={
+                  stream.intersections.filter(
+                    (i) => i.connection === 'disconnected' || i.connection === 'unsupported',
+                  ).length
+                }
+              />
               <div className="mt-1 text-[10px] text-[var(--color-ink-3)]">
                 Click a signal for detail
               </div>
@@ -127,11 +139,13 @@ export function App() {
   )
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({ color, label, count }: { color: string; label: string; count: number }) {
   return (
     <div className="flex items-center gap-2">
       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-      <span>{label}</span>
+      <span>
+        {label} <span className="text-[var(--color-ink-3)]">({count})</span>
+      </span>
     </div>
   )
 }
