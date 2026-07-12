@@ -51,6 +51,13 @@ class Phase:
         self.ped_state = 'dont_walk'  # walk / ped_clear / dont_walk
         self.extensions = 0.0
         self.recall = num in COORDINATED  # coordinated phases re-call each cycle
+        # phaseControlGroup inputs (NTCIP columns 4, 2, 5). Hold pins an
+        # active green; omit removes the phase from selection once it has
+        # finished serving; force-off terminates green as soon as the
+        # minimum green has been served.
+        self.hold = False
+        self.omit = False
+        self.force_off = False
 
     def ring(self):
         return 1 if self.num in RING1 else 2
@@ -68,7 +75,7 @@ class SignalEngine:
         self.active = {1: None, 2: None}
         self.cycle_count = 0
         self._now = time.monotonic()
-        self._start_barrier(force=True)
+        self._start_barrier()
 
     # --- external inputs (the ATMS control path drives these) ---
 
@@ -87,10 +94,17 @@ class SignalEngine:
             phase = base + bit + 1
             if phase in self.phases:
                 on = bool(mask & (1 << bit))
+                ph = self.phases[phase]
                 if kind == 'veh':
-                    self.phases[phase].veh_call = on
+                    ph.veh_call = on
                 elif kind == 'ped':
-                    self.phases[phase].ped_call = on
+                    ph.ped_call = on
+                elif kind == 'hold':
+                    ph.hold = on
+                elif kind == 'omit':
+                    ph.omit = on
+                elif kind == 'forceoff':
+                    ph.force_off = on
 
     # --- engine core ---
 
@@ -101,15 +115,17 @@ class SignalEngine:
 
     def _next_phase(self, ring, barrier):
         """Pick the next phase to serve in this ring/barrier: the first with a
-        call, else the first (so coordination keeps the mainline moving)."""
-        candidates = self._phases_in(ring, barrier)
+        call, else the first (so coordination keeps the mainline moving).
+        Omitted phases are never selected."""
+        candidates = [p for p in self._phases_in(ring, barrier)
+                      if not self.phases[p].omit]
         for p in candidates:
             ph = self.phases[p]
             if ph.veh_call or ph.ped_call or ph.recall:
                 return p
         return candidates[0] if candidates else None
 
-    def _start_barrier(self, force=False):
+    def _start_barrier(self):
         for ring in (1, 2):
             phase = self._next_phase(ring, self.barrier)
             self.active[ring] = phase
@@ -129,8 +145,15 @@ class SignalEngine:
     def _green_done(self, ph):
         t = ph.timing
         elapsed = self._elapsed(ph)
+        # A held phase never terminates its green; hold wins over force-off,
+        # matching controller behavior where force-off cannot end a hold.
+        if ph.hold:
+            return False
         if elapsed < t['min_green']:
             return False
+        # Force-off terminates green as soon as the minimum has been served.
+        if ph.force_off:
+            return True
         # Ped timing holds green through walk + ped clear.
         if ph.ped_state == 'walk' and elapsed < t['walk']:
             return False

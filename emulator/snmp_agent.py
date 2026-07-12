@@ -164,9 +164,12 @@ class Agent:
                 lambda k=key: enc_int(self.engine.status_masks()[k] & 0xFF))
 
         # Phase control group table (group 1) - SET targets, readable too.
-        self._control = {'veh': 0, 'ped': 0}
-        t[ASC + (1, 5, 1, 6, 1)] = lambda: enc_int(self._control['veh'])
-        t[ASC + (1, 5, 1, 7, 1)] = lambda: enc_int(self._control['ped'])
+        # Columns mirror the real controller: 2 omit, 4 hold, 5 force-off,
+        # 6 veh call, 7 ped call.
+        self._control = {kind: 0 for kind in self.CONTROL_COLS.values()}
+        for col, kind in self.CONTROL_COLS.items():
+            t[ASC + (1, 5, 1, col, 1)] = (
+                lambda k=kind: enc_int(self._control[k]))
 
         # Unit status.
         t[ASC + (3, 5, 0)] = lambda: enc_int(6)   # control status (running)
@@ -185,15 +188,15 @@ class Agent:
             t[ASC + (2, 4, 1, 3, d)] = lambda: enc_int(255)   # occupancy no-data
         return t
 
+    # phaseControlGroupTable column -> engine mask kind.
+    CONTROL_COLS = {2: 'omit', 4: 'hold', 5: 'forceoff', 6: 'veh', 7: 'ped'}
+
     def _control_set(self, oid, value):
-        if oid == ASC + (1, 5, 1, 6, 1):
-            self._control['veh'] = value & 0xFF
-            self.engine.set_group_mask('veh', 1, value & 0xFF)
-            return True
-        if oid == ASC + (1, 5, 1, 7, 1):
-            self._control['ped'] = value & 0xFF
-            self.engine.set_group_mask('ped', 1, value & 0xFF)
-            return True
+        for col, kind in self.CONTROL_COLS.items():
+            if oid == ASC + (1, 5, 1, col, 1):
+                self._control[kind] = value & 0xFF
+                self.engine.set_group_mask(kind, 1, value & 0xFF)
+                return True
         return False
 
     def _varbind(self, oid, value_bytes):
