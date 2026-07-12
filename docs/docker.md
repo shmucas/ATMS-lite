@@ -19,13 +19,30 @@ opening the browser.
 
 | Service | Image | Role |
 |---|---|---|
-| emulator-1..4 | `./emulator` | one virtual NTCIP controller each, SNMP on udp/161 inside the network |
-| backend | `./backend` | polls all four over the Docker network, serves REST + WebSocket |
+| emulator-1..4 | `./emulator` | started by default, one virtual NTCIP controller each, SNMP on udp/161 inside the network |
+| emulator-5..10 | `./emulator` | same image, but behind the `extra` Compose profile so a plain `docker compose up` doesn't start them |
+| backend | `./backend` | polls the registered intersections over the Docker network, serves REST + WebSocket |
 | frontend | `./frontend` | nginx serving the React build, proxies /api and /ws to the backend |
 
 Each emulator is a separate container, so the intersections are genuinely
 isolated: killing one (`docker compose kill emulator-3`) degrades only its tile
 on the dashboard, exactly as a real controller going offline would.
+
+## Up to 10 virtual intersections
+
+Only `emulator-1..4` start by default, matching `backend/intersections.docker.json`
+(`virtual-1..4`). To use more of the 10 available slots:
+
+```
+docker compose --profile extra up -d emulator-5
+```
+
+or `tools/start_docker.sh --extra` to bring up all 10 at once. Starting the
+container is not enough on its own though - it's just a new SNMP target on the
+Docker network. Register it as an intersection from the dashboard's
+"Add intersection" form, with host set to the service name (e.g. `emulator-5`)
+and port `161`. This is the same create flow used for any other intersection;
+there's no separate provisioning step.
 
 ## The physical 2070
 
@@ -42,6 +59,13 @@ npm run dev --prefix frontend
 with the host `backend/intersections.json` listing the real controller plus the
 emulator ports. This is exactly the setup used to verify M8: one real
 controller plus four virtual, all on one dashboard.
+
+Note this is a different config file than the containerized backend uses
+(`backend/intersections.docker.json`, baked into the backend image). Running
+`tools/start_backend.sh` on its own reads `backend/intersections.json`
+directly and has no emulator entries unless you add them there yourself - if
+the dashboard shows nothing at all, check which of the two files the running
+backend actually loaded.
 
 ## Prerequisite
 

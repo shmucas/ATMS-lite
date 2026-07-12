@@ -17,6 +17,35 @@ services:
     build: ./emulator
     environment: { EMU_SYS_NAME: VirtualASC-4 }
 
+  # Slots 5-10 are defined but not started by default, so a plain
+  # `docker compose up` keeps today's 4-intersection footprint. Bring one up
+  # with `docker compose --profile extra up -d emulator-5`, then register it
+  # as an intersection from the UI (host = the service name, port 161).
+  emulator-5:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-5 }
+    profiles: ["extra"]
+  emulator-6:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-6 }
+    profiles: ["extra"]
+  emulator-7:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-7 }
+    profiles: ["extra"]
+  emulator-8:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-8 }
+    profiles: ["extra"]
+  emulator-9:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-9 }
+    profiles: ["extra"]
+  emulator-10:
+    build: ./emulator
+    environment: { EMU_SYS_NAME: VirtualASC-10 }
+    profiles: ["extra"]
+
   backend:
     build: ./backend
     ports:

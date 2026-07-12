@@ -72,8 +72,9 @@ EMU_SNMP_PORT=1161 .venv/bin/python emulator/main.py
 The full containerized multi-intersection stack is in
 [docs/docker.md](docs/docker.md). `tools/start_docker.sh` brings up the
 compose stack (emulators, backend, frontend), waits for the backend to
-respond, and opens the dashboard. Pass `--build` to rebuild images first or
-`--no-open` to skip opening the browser.
+respond, and opens the dashboard. Pass `--build` to rebuild images first,
+`--no-open` to skip opening the browser, or `--extra` to bring up all 10
+available virtual intersections instead of the default 4.
 
 ## Layout
 

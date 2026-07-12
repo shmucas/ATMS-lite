@@ -36,6 +36,7 @@ async def stream(ws: WebSocket):
             'intersections': [
                 {'id': p.cfg['id'], 'name': p.cfg['name'],
                  'lat': p.cfg['lat'], 'lon': p.cfg['lon'],
+                 'host': p.cfg['host'], 'port': p.cfg['port'],
                  'device_type': p.cfg.get('device_type', 'maxtime'),
                  'connection': p.state,
                  'static': hub.static.get(p.cfg['id'])}
@@ -43,6 +44,7 @@ async def stream(ws: WebSocket):
             ] + [
                 {'id': cfg['id'], 'name': cfg['name'],
                  'lat': cfg['lat'], 'lon': cfg['lon'],
+                 'host': cfg['host'], 'port': cfg['port'],
                  'device_type': cfg.get('device_type', 'maxtime'),
                  'connection': 'unsupported', 'static': None}
                 for cfg in ws.app.state.unsupported.values()

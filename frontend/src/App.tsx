@@ -3,6 +3,7 @@ import { DetailDrawer } from './components/DetailDrawer'
 import { draftFromInfo, IntersectionEditor, type EditorTarget } from './components/IntersectionEditor'
 import { SignalMap } from './components/SignalMap'
 import { TopBar } from './components/TopBar'
+import { intersectionsApi } from './lib/intersections'
 import { useAtmsStream } from './lib/stream'
 
 export function App() {
@@ -19,6 +20,18 @@ export function App() {
   }, [selected, stream.intersections])
 
   const backendDown = !stream.wsConnected
+  const unpinned = stream.intersections.filter((i) => i.lat == null || i.lon == null)
+
+  const deleteIntersection = async (id: string, name: string) => {
+    if (!window.confirm(`Remove ${name} from the network?`)) return
+    try {
+      await intersectionsApi.remove(id)
+      if (selected === id) setSelected(null)
+      if (editor?.id === id) setEditor(null)
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -62,6 +75,7 @@ export function App() {
                 lon,
               })
             }}
+            onDeleteIntersection={deleteIntersection}
             pickMode={picking}
             onPick={(lat, lon) => {
               setPicking(false)
@@ -72,6 +86,32 @@ export function App() {
           {stream.wsConnected && stream.intersections.length === 0 && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-[var(--color-ink-3)]">
               No intersections yet. Right-click the map to add one.
+            </div>
+          )}
+
+          {unpinned.length > 0 && (
+            <div className="absolute right-4 top-4 z-[500] max-w-[240px] rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 p-3 text-xs text-[var(--color-ink-2)] backdrop-blur">
+              <div className="mb-1.5 font-semibold text-[var(--color-ink)]">
+                Unpinned ({unpinned.length})
+              </div>
+              <div className="space-y-1">
+                {unpinned.map((i) => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    onClick={() => {
+                      setSelected(null)
+                      setEditor(draftFromInfo(i))
+                    }}
+                    className="block w-full truncate rounded-md px-1.5 py-1 text-left hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
+                  >
+                    {i.name}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1.5 text-[10px] text-[var(--color-ink-3)]">
+                Not shown on the map. Click one to pin it.
+              </div>
             </div>
           )}
 
