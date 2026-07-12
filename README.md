@@ -52,11 +52,16 @@ npm install --prefix frontend
 npm run dev --prefix frontend      # http://localhost:5173
 ```
 
-The backend is a plain process, not a service, so it stops when the
-terminal or machine closes. `tools/start_backend.sh` wraps the uvicorn
-command above: it checks the venv exists, refuses to double-start if port
-8000 is already taken, and waits for `/docs` to respond before returning.
-Use `--fg` to run it in the foreground instead of backgrounded.
+Both are plain processes, not services, so they stop when the terminal or
+machine closes and need restarting each session. `tools/start_backend.sh`
+and `tools/start_frontend.sh` wrap the two commands above: each checks its
+prerequisites (venv, node_modules), refuses to double-start if its port is
+already taken, and waits for the service to actually respond before
+returning. Use `--fg` on either to run in the foreground instead of
+backgrounded.
+
+`tools/start_stack.sh` starts both and opens the dashboard in your
+browser. Pass `--no-open` to skip opening the browser.
 
 A virtual controller for testing without hardware:
 
