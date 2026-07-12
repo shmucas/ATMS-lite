@@ -40,9 +40,24 @@ docker compose --profile extra up -d emulator-5
 or `tools/start_docker.sh --extra` to bring up all 10 at once. Starting the
 container is not enough on its own though - it's just a new SNMP target on the
 Docker network. Register it as an intersection from the dashboard's
-"Add intersection" form, with host set to the service name (e.g. `emulator-5`)
-and port `161`. This is the same create flow used for any other intersection;
-there's no separate provisioning step.
+"Add intersection" form: pick the matching entry (`docker-emulator-1..10`)
+from the "Docker emulator" dropdown and it autofills host (`emulator-N`), port
+(`161`), and device API (MaxTime) for you. This is the same create flow used
+for any other intersection; there's no separate provisioning step.
+
+Container IPs on the Docker network are dynamic (reassigned on every
+`up`/restart), so the form intentionally fills in the Compose *service name*
+(`emulator-N`), not an IP - Compose's built-in DNS resolves that name to
+whichever address the container currently has.
+
+## Device API (docker intersection 1-10)
+
+The "Device API" field on the intersection form lists `maxtime`, `econolite`,
+and `siemens`, but only `maxtime` is implemented and selectable today - the
+others show as "coming soon" and are disabled. This applies to all ten Docker
+emulator slots (`emulator-1..10`): they all speak the same MaxTime/NTCIP-over-
+SNMP protocol, so there's no emulated Econolite or Siemens controller to
+register even once those drivers exist on the backend.
 
 ## The physical 2070
 

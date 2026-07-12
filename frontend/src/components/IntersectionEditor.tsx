@@ -162,6 +162,29 @@ export function IntersectionEditor(props: {
           )}
         </Field>
 
+        {target.mode === 'create' && (
+          <Field label="Docker emulator">
+            <select
+              className="input"
+              value=""
+              onChange={(e) => {
+                const n = e.target.value
+                if (!n) return
+                setHost(`emulator-${n}`)
+                setPort('161')
+                setDeviceType('maxtime')
+              }}
+            >
+              <option value="">Not a Docker emulator</option>
+              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  docker-emulator-{n}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+
         <Field label="IP address / host">
           <input
             className="input"
