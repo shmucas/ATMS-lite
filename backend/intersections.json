@@ -8,14 +8,98 @@
     "lon": -84.35846149921419,
     "device_type": "maxtime",
     "movements": [
-      { "id": "nb-left", "approach": "NB", "lanes": ["left"], "phase": 5, "lat": 33.8451461, "lon": -84.3584994, "heading": 0 },
-      { "id": "nb-through", "approach": "NB", "lanes": ["through", "through"], "phase": 2, "lat": 33.8451461, "lon": -84.3584236, "heading": 0 },
-      { "id": "sb-left", "approach": "SB", "lanes": ["left"], "phase": 1, "lat": 33.8456851, "lon": -84.3584236, "heading": 180 },
-      { "id": "sb-through", "approach": "SB", "lanes": ["through", "through"], "phase": 6, "lat": 33.8456851, "lon": -84.3584994, "heading": 180 },
-      { "id": "eb-left", "approach": "EB", "lanes": ["left"], "phase": 7, "lat": 33.8454471, "lon": -84.358786, "heading": 90 },
-      { "id": "eb-through-right", "approach": "EB", "lanes": ["through", "right"], "phase": 4, "lat": 33.8453842, "lon": -84.358786, "heading": 90 },
-      { "id": "wb-left", "approach": "WB", "lanes": ["left"], "phase": 3, "lat": 33.8453842, "lon": -84.358137, "heading": 270 },
-      { "id": "wb-through-right", "approach": "WB", "lanes": ["through", "right"], "phase": 8, "lat": 33.8454471, "lon": -84.358137, "heading": 270 }
+      {
+        "id": "nb-left",
+        "approach": "NB",
+        "lanes": [
+          "left"
+        ],
+        "phase": 5,
+        "lat": 33.84535769046338,
+        "lon": -84.35864925384523,
+        "heading": 330.0
+      },
+      {
+        "id": "nb-through",
+        "approach": "NB",
+        "lanes": [
+          "through",
+          "through"
+        ],
+        "phase": 2,
+        "lat": 33.845455708860804,
+        "lon": -84.35844004154207,
+        "heading": 330.0
+      },
+      {
+        "id": "sb-left",
+        "approach": "SB",
+        "lanes": [
+          "left"
+        ],
+        "phase": 1,
+        "lat": 33.84575867410549,
+        "lon": -84.35855269432068,
+        "heading": 150.0
+      },
+      {
+        "id": "sb-through",
+        "approach": "SB",
+        "lanes": [
+          "through",
+          "through"
+        ],
+        "phase": 6,
+        "lat": 33.84568293289504,
+        "lon": -84.35879409313203,
+        "heading": 150.0
+      },
+      {
+        "id": "eb-left",
+        "approach": "EB",
+        "lanes": [
+          "left"
+        ],
+        "phase": 7,
+        "lat": 33.84552253952182,
+        "lon": -84.3589872121811,
+        "heading": 60.0
+      },
+      {
+        "id": "eb-through-right",
+        "approach": "EB",
+        "lanes": [
+          "through",
+          "right"
+        ],
+        "phase": 4,
+        "lat": 33.845353235079024,
+        "lon": -84.35888528823853,
+        "heading": 60.0
+      },
+      {
+        "id": "wb-left",
+        "approach": "WB",
+        "lanes": [
+          "left"
+        ],
+        "phase": 3,
+        "lat": 33.84554036102261,
+        "lon": -84.35823619365694,
+        "heading": 240.0
+      },
+      {
+        "id": "wb-through-right",
+        "approach": "WB",
+        "lanes": [
+          "through",
+          "right"
+        ],
+        "phase": 8,
+        "lat": 33.84574085265025,
+        "lon": -84.35834884643556,
+        "heading": 240.0
+      }
     ]
   },
   {

@@ -7,6 +7,8 @@ dashboard.
 
 Built and verified end to end against real hardware.
 
+![ATMS-lite dashboard: map view with an intersection's live signal status, ring-and-barrier diagram, and satellite mini-map of its lane movements](docs/images/dashboard.png)
+
 ## What it does
 
 - **Live signal monitoring.** Polls phase status (red/yellow/green), ped
