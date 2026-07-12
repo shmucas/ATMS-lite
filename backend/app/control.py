@@ -5,7 +5,11 @@ armed. Arming is per-intersection and expires on a timer so a forgotten armed
 session cannot linger. All calls are cleared automatically on disarm, on
 disconnect, and on shutdown, and every write is appended to an audit log.
 
-The control bitmask columns are in NTCIP phaseControlGroupTable (asc.1.5.1):
+The control bitmask columns are in NTCIP phaseControlGroupTable (asc.1.5.1),
+confirmed against the bench unit (see docs/ntcip-oids.md):
+  col 2 = phaseControlGroupPhaseOmit
+  col 4 = phaseControlGroupHold
+  col 5 = phaseControlGroupForceOff
   col 6 = phaseControlGroupVehCall
   col 7 = phaseControlGroupPedCall
 Each is an 8-bit mask per group of 8 phases.
@@ -22,6 +26,9 @@ from .snmp import SnmpError
 
 log = logging.getLogger('atms.control')
 
+OMIT_COL = 2
+HOLD_COL = 4
+FORCE_OFF_COL = 5
 VEH_CALL_COL = 6
 PED_CALL_COL = 7
 ARM_TIMEOUT_S = 300  # an armed intersection auto-disarms after 5 minutes
@@ -54,6 +61,9 @@ class Controller:
         # for what we have asked the controller to hold.
         self._veh = {}
         self._ped = {}
+        self._hold = {}
+        self._omit = {}
+        self._forced_phase = None
         self._lock = asyncio.Lock()
 
     def status(self):
@@ -62,6 +72,9 @@ class Controller:
             'armed_until': self.armed_until,
             'veh_calls': dict(self._veh),
             'ped_calls': dict(self._ped),
+            'holds': dict(self._hold),
+            'omits': dict(self._omit),
+            'forced_phase': self._forced_phase,
         }
 
     def _check_armed(self):
@@ -92,20 +105,73 @@ class Controller:
     async def place_call(self, kind, phase, on=True, actor='ui'):
         if kind not in ('veh', 'ped'):
             raise ControlError(f'unknown call kind {kind}')
+        self._check_phase(phase)
+        async with self._lock:
+            self._check_armed()
+            store = self._veh if kind == 'veh' else self._ped
+            column = VEH_CALL_COL if kind == 'veh' else PED_CALL_COL
+            group, mask = self._set_bit(store, phase, on)
+            await self._write(column, group, mask, actor,
+                              f'{kind}_call phase {phase} {"on" if on else "off"}')
+            self._publish()
+        return self.status()
+
+    def _set_bit(self, store, phase, on):
+        group = (phase - 1) // 8 + 1
+        bit = 1 << ((phase - 1) % 8)
+        mask = store.get(group, 0)
+        mask = (mask | bit) if on else (mask & ~bit)
+        store[group] = mask
+        return group, mask
+
+    def _check_phase(self, phase):
         polled = self.hub.static.get(self.cfg['id'], {}).get('polled_phases', 8)
         if not 1 <= phase <= polled:
             raise ControlError(f'phase {phase} out of range 1..{polled}')
+
+    async def hold_phase(self, phase, on=True, actor='ui'):
+        self._check_phase(phase)
         async with self._lock:
             self._check_armed()
-            group = (phase - 1) // 8 + 1
-            bit = 1 << ((phase - 1) % 8)
-            store = self._veh if kind == 'veh' else self._ped
-            mask = store.get(group, 0)
-            mask = (mask | bit) if on else (mask & ~bit)
-            column = VEH_CALL_COL if kind == 'veh' else PED_CALL_COL
-            await self._write(column, group, mask, actor,
-                              f'{kind}_call phase {phase} {"on" if on else "off"}')
-            store[group] = mask
+            group, mask = self._set_bit(self._hold, phase, on)
+            await self._write(HOLD_COL, group, mask, actor,
+                              f'hold phase {phase} {"on" if on else "off"}')
+            self._publish()
+        return self.status()
+
+    async def force_phase(self, phase, on=True, actor='ui'):
+        """Force a single phase to serve now: omit every other phase in its
+        ring and place a call on the target. Releasing clears only the omit
+        bits this action set, and only for the phase it forced."""
+        self._check_phase(phase)
+        rings = self.hub.static.get(self.cfg['id'], {}).get('rings', [])
+        ring = next((r for r in rings if phase in r['phases']), None)
+        if ring is None:
+            raise ControlError(f'phase {phase} is not in a known ring')
+        async with self._lock:
+            self._check_armed()
+            if on:
+                if self._forced_phase is not None and self._forced_phase != phase:
+                    raise ControlError(
+                        f'phase {self._forced_phase} is already forced; release it first')
+                for other in ring['phases']:
+                    if other == phase:
+                        continue
+                    group, mask = self._set_bit(self._omit, other, True)
+                    await self._write(OMIT_COL, group, mask, actor,
+                                      f'omit phase {other} (forcing {phase})')
+                group, mask = self._set_bit(self._veh, phase, True)
+                await self._write(VEH_CALL_COL, group, mask, actor,
+                                  f'veh_call phase {phase} on (force)')
+                self._forced_phase = phase
+            else:
+                for other in ring['phases']:
+                    if other == phase:
+                        continue
+                    group, mask = self._set_bit(self._omit, other, False)
+                    await self._write(OMIT_COL, group, mask, actor,
+                                      f'clear omit phase {other} (release force {phase})')
+                self._forced_phase = None
             self._publish()
         return self.status()
 
@@ -140,20 +206,40 @@ class Controller:
                                       f'clear ped group {group} ({reason})')
                 except ControlError:
                     pass
+        for group, mask in list(self._hold.items()):
+            if mask:
+                try:
+                    await self._write(HOLD_COL, group, 0, actor,
+                                      f'clear hold group {group} ({reason})')
+                except ControlError:
+                    pass
+        for group, mask in list(self._omit.items()):
+            if mask:
+                try:
+                    await self._write(OMIT_COL, group, 0, actor,
+                                      f'clear omit group {group} ({reason})')
+                except ControlError:
+                    pass
         self._veh.clear()
         self._ped.clear()
+        self._hold.clear()
+        self._omit.clear()
+        self._forced_phase = None
 
     async def on_disconnect(self):
         """Called by the poller when the link drops. Drop arm and desired
         state so a reconnect never silently re-applies stale calls."""
         async with self._lock:
-            if self.armed or self._veh or self._ped:
+            if self.armed or self._veh or self._ped or self._hold or self._omit:
                 self.audit.write(self.cfg['id'], 'system', 'auto-disarm',
                                  {'reason': 'controller disconnected'})
             self.armed = False
             self.armed_until = None
             self._veh.clear()
             self._ped.clear()
+            self._hold.clear()
+            self._omit.clear()
+            self._forced_phase = None
             self._publish()
 
     async def shutdown(self):

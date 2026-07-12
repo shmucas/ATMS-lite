@@ -6,6 +6,9 @@ export interface ControlState {
   armed_until: string | null
   veh_calls: Record<string, number>
   ped_calls: Record<string, number>
+  holds: Record<string, number>
+  omits: Record<string, number>
+  forced_phase: number | null
 }
 
 export interface StreamState {

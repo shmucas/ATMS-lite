@@ -5,13 +5,15 @@ export function CoordMonitor({ snapshot }: { snapshot: Snapshot }) {
   if (!coord) return null
 
   const elapsed = coord.cycle_elapsed
-  const avg = coord.avg_cycle
-  /* Actuated operation: the cycle is not fixed. Show the running cycle against
-     the recent average and say so, rather than implying a fixed cycle. */
-  const pct =
-    elapsed != null && avg != null && avg > 0
-      ? Math.min(100, (elapsed / avg) * 100)
-      : null
+  const total = coord.last_cycle
+  /* Actuated operation: the cycle is not fixed, so show the running clock
+     against the last observed cycle length rather than a fixed target. */
+  const current =
+    elapsed != null && total != null
+      ? `${elapsed.toFixed(0)}/${total.toFixed(0)}`
+      : elapsed != null
+        ? `${elapsed.toFixed(0)}s`
+        : '--'
 
   return (
     <section>
@@ -20,36 +22,7 @@ export function CoordMonitor({ snapshot }: { snapshot: Snapshot }) {
       </h3>
       <div className="grid grid-cols-2 gap-2">
         <Item label="Pattern" value={coord.pattern ?? '--'} />
-        <Item
-          label="Avg cycle"
-          value={avg != null ? `${avg.toFixed(0)}s` : '--'}
-          hint={coord.cycles_seen ? `over ${coord.cycles_seen}` : undefined}
-        />
-        <Item
-          label="Last cycle"
-          value={coord.last_cycle != null ? `${coord.last_cycle.toFixed(0)}s` : '--'}
-        />
-        <Item
-          label="Into cycle"
-          value={elapsed != null ? `${elapsed.toFixed(0)}s` : '--'}
-        />
-      </div>
-      <div className="mt-3">
-        <div className="mb-1 flex items-baseline justify-between text-[11px] text-[var(--color-ink-3)]">
-          <span>Cycle vs recent average</span>
-          {pct != null && <span className="tabular">{pct.toFixed(0)}%</span>}
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-accent)]/15">
-          <div
-            className="h-full rounded-full bg-[var(--color-accent)] transition-all"
-            style={{ width: pct != null ? `${pct}%` : '0%' }}
-          />
-        </div>
-        <p className="mt-1 text-[10px] text-[var(--color-ink-3)]">
-          {avg == null
-            ? 'Cycle length is timed between successive greens of a phase; it appears after one full cycle.'
-            : 'Actuated: cycle varies with demand, so this compares to the recent average.'}
-        </p>
+        <Item label="Current cycle" value={current} />
       </div>
     </section>
   )

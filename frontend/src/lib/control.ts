@@ -29,4 +29,8 @@ export const control = {
   disarm: (id: string) => post(`/api/intersections/${id}/disarm`),
   call: (id: string, kind: 'veh' | 'ped', phase: number, on = true) =>
     post(`/api/intersections/${id}/call`, { kind, phase, on }),
+  hold: (id: string, phase: number, on = true) =>
+    post(`/api/intersections/${id}/hold`, { phase, on }),
+  force: (id: string, phase: number, on = true) =>
+    post(`/api/intersections/${id}/force`, { phase, on }),
 }

@@ -155,6 +155,36 @@ async def place_call(iid: str, request: Request, body: dict = Body(...),
         raise HTTPException(409, str(exc))
 
 
+@router.post('/api/intersections/{iid}/hold')
+async def hold_phase(iid: str, request: Request, body: dict = Body(...),
+                     x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    controller = _controller(request, iid)
+    phase = body.get('phase')
+    on = bool(body.get('on', True))
+    if not isinstance(phase, int):
+        raise HTTPException(422, 'phase must be an integer')
+    try:
+        return await controller.hold_phase(phase, on)
+    except ControlError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@router.post('/api/intersections/{iid}/force')
+async def force_phase(iid: str, request: Request, body: dict = Body(...),
+                      x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    controller = _controller(request, iid)
+    phase = body.get('phase')
+    on = bool(body.get('on', True))
+    if not isinstance(phase, int):
+        raise HTTPException(422, 'phase must be an integer')
+    try:
+        return await controller.force_phase(phase, on)
+    except ControlError as exc:
+        raise HTTPException(409, str(exc))
+
+
 @router.get('/api/audit')
 def audit(request: Request, limit: int = 100):
     return request.app.state.audit.tail(limit)

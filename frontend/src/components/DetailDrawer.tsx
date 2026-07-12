@@ -6,6 +6,7 @@ import type { Connection, IntersectionInfo, Snapshot } from '../types'
 import { CoordMonitor } from './CoordMonitor'
 import { DetectorPanel } from './panels/DetectorPanel'
 import { HealthPanel } from './panels/HealthPanel'
+import { PhaseStatusTable } from './PhaseStatusTable'
 import { RingDiagram } from './RingDiagram'
 
 type Tab = 'signals' | 'detectors' | 'health'
@@ -39,6 +40,14 @@ function SignalsTab(props: {
   const enabled = props.control?.armed ?? false
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [phaseInput, setPhaseInput] = useState('1')
+  const forcedPhase = props.control?.forced_phase ?? null
+  const holds = props.control?.holds ?? {}
+  const phaseNum = parseInt(phaseInput, 10)
+  const validPhase = Number.isInteger(phaseNum) && phaseNum >= 1
+  const phaseHeld = validPhase
+    ? Boolean((holds[String(((phaseNum - 1) >> 3) + 1)] ?? 0) & (1 << ((phaseNum - 1) % 8)))
+    : false
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -67,6 +76,7 @@ function SignalsTab(props: {
 
   return (
     <div className="space-y-5">
+      <PhaseStatusTable snapshot={snapshot} />
       <RingDiagram
         snapshot={snapshot}
         info={info}
@@ -110,6 +120,60 @@ function SignalsTab(props: {
           <div className="mt-3 rounded-md border border-[var(--color-degraded)]/30 bg-[var(--color-degraded)]/10 px-3 py-2 text-xs text-[var(--color-degraded)]">
             Live control is enabled. Calls auto-clear when you disable it, the
             link drops, or after 5 minutes.
+          </div>
+        )}
+        {enabled && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] pt-3">
+            <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+              Phase
+              <input
+                type="number"
+                min={1}
+                value={phaseInput}
+                onChange={(e) => setPhaseInput(e.target.value)}
+                className="w-14 rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel)] px-2 py-1 text-xs text-[var(--color-ink)]"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={busy || !validPhase || info.connection === 'disconnected'}
+              onClick={() =>
+                run(() => control.hold(info.id, phaseNum, !phaseHeld))
+              }
+              className={clsx(
+                'rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40',
+                phaseHeld
+                  ? 'bg-[var(--color-degraded)] text-black hover:brightness-110'
+                  : 'border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]',
+              )}
+            >
+              {phaseHeld ? 'Release hold' : 'Hold phase'}
+            </button>
+            <button
+              type="button"
+              disabled={
+                busy || !validPhase || info.connection === 'disconnected' ||
+                (forcedPhase != null && forcedPhase !== phaseNum)
+              }
+              onClick={() =>
+                run(() =>
+                  control.force(info.id, phaseNum, forcedPhase !== phaseNum),
+                )
+              }
+              className={clsx(
+                'rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40',
+                forcedPhase === phaseNum
+                  ? 'bg-[var(--color-degraded)] text-black hover:brightness-110'
+                  : 'border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]',
+              )}
+            >
+              {forcedPhase === phaseNum ? 'Release force' : 'Force phase'}
+            </button>
+            {forcedPhase != null && (
+              <span className="text-[11px] text-[var(--color-ink-3)]">
+                Phase {forcedPhase} forced; all others in its ring are omitted.
+              </span>
+            )}
           </div>
         )}
         {error && (
