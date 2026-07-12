@@ -10,6 +10,11 @@ docker compose up --build
 
 Then open http://localhost:8080.
 
+`tools/start_docker.sh` wraps this: it checks Docker is running, brings the
+stack up in the background, waits for the backend to respond, then opens the
+dashboard. Pass `--build` to force a rebuild first, or `--no-open` to skip
+opening the browser.
+
 ## Services
 
 | Service | Image | Role |
