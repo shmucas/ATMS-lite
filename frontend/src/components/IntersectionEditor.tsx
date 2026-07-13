@@ -1,95 +1,102 @@
-import clsx from 'clsx'
-import { useEffect, useState } from 'react'
-import { intersectionsApi, type ProbeResult } from '../lib/intersections'
-import type { DeviceType, IntersectionInfo, Movement } from '../types'
-import { MovementsPanel } from './MovementsPanel'
+import clsx from "clsx";
+import { useEffect, useState } from "react";
+import { intersectionsApi, type ProbeResult } from "../lib/intersections";
+import type { DeviceType, IntersectionInfo, Movement } from "../types";
+import { MovementsPanel } from "./MovementsPanel";
 
 const DEVICE_LABEL: Record<DeviceType, string> = {
-  maxtime: 'Q-Free MaxTime (NTCIP/SNMP)',
-  econolite: 'Econolite',
-  siemens: 'Siemens',
-}
+  maxtime: "Q-Free MaxTime (NTCIP/SNMP)",
+  econolite: "Econolite",
+  siemens: "Siemens",
+};
 
-type Tab = 'details' | 'movements'
+type Tab = "details" | "movements";
 
 export interface EditorTarget {
-  mode: 'create' | 'edit'
-  id?: string
-  name: string
-  host: string
-  port: number
-  device_type: DeviceType
-  lat: number | null
-  lon: number | null
-  movements?: Movement[]
+  mode: "create" | "edit";
+  id?: string;
+  name: string;
+  host: string;
+  port: number;
+  device_type: DeviceType;
+  lat: number | null;
+  lon: number | null;
+  movements?: Movement[];
 }
 
 export function IntersectionEditor(props: {
-  target: EditorTarget
-  onClose: () => void
-  onSaved: () => void
-  onPickLocation: () => void
-  picking?: boolean
+  target: EditorTarget;
+  onClose: () => void;
+  onSaved: () => void;
+  onPickLocation: () => void;
+  picking?: boolean;
 }) {
-  const { target, onClose, onSaved, onPickLocation, picking } = props
-  const [tab, setTab] = useState<Tab>('details')
-  const [name, setName] = useState(target.name)
-  const [host, setHost] = useState(target.host)
-  const [port, setPort] = useState(String(target.port || 161))
-  const [deviceType, setDeviceType] = useState<DeviceType>(target.device_type)
-  const [lat, setLat] = useState(target.lat)
-  const [lon, setLon] = useState(target.lon)
-  const [readCommunity, setReadCommunity] = useState('')
-  const [writeCommunity, setWriteCommunity] = useState('')
-  const [supported, setSupported] = useState<DeviceType[]>(['maxtime'])
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [probing, setProbing] = useState(false)
-  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
-  const [movementsDraft, setMovementsDraft] = useState<Movement[]>(target.movements ?? [])
+  const { target, onClose, onSaved, onPickLocation, picking } = props;
+  const [tab, setTab] = useState<Tab>("details");
+  const [name, setName] = useState(target.name);
+  const [host, setHost] = useState(target.host);
+  const [port, setPort] = useState(String(target.port || 161));
+  const [deviceType, setDeviceType] = useState<DeviceType>(target.device_type);
+  const [lat, setLat] = useState(target.lat);
+  const [lon, setLon] = useState(target.lon);
+  const [readCommunity, setReadCommunity] = useState("");
+  const [writeCommunity, setWriteCommunity] = useState("");
+  const [supported, setSupported] = useState<DeviceType[]>(["maxtime"]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
+  const [movementsDraft, setMovementsDraft] = useState<Movement[]>(
+    target.movements ?? [],
+  );
 
   useEffect(() => {
     intersectionsApi
       .deviceTypes()
       .then((d) => setSupported(d.supported))
-      .catch(() => undefined)
-  }, [])
+      .catch(() => undefined);
+  }, []);
 
   // Picking a location on the map updates target.lat/lon without remounting
   // the editor, so sync it here instead of via the initial useState above.
   useEffect(() => {
-    setLat(target.lat)
-    setLon(target.lon)
-  }, [target.lat, target.lon])
+    setLat(target.lat);
+    setLon(target.lon);
+  }, [target.lat, target.lon]);
 
   const testConnection = async () => {
     if (!host.trim()) {
-      setProbeResult({ ok: false, error: 'Enter a host/IP first.' })
-      return
+      setProbeResult({ ok: false, error: "Enter a host/IP first." });
+      return;
     }
-    setProbing(true)
-    setProbeResult(null)
+    setProbing(true);
+    setProbeResult(null);
     try {
       const result = await intersectionsApi.probe({
         host: host.trim(),
         port: Number(port) || 161,
-        ...(readCommunity.trim() ? { read_community: readCommunity.trim() } : {}),
-      })
-      setProbeResult(result)
+        ...(readCommunity.trim()
+          ? { read_community: readCommunity.trim() }
+          : {}),
+      });
+      setProbeResult(result);
     } catch (e) {
-      setProbeResult({ ok: false, error: e instanceof Error ? e.message : String(e) })
+      setProbeResult({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
     } finally {
-      setProbing(false)
+      setProbing(false);
     }
-  }
+  };
 
   const save = async () => {
     if (!name.trim() || !host.trim()) {
-      setError('Name and host/IP are required.')
-      return
+      setError("Name and host/IP are required.");
+      return;
     }
-    setBusy(true)
-    setError(null)
+    setBusy(true);
+    setError(null);
     const draft = {
       name: name.trim(),
       host: host.trim(),
@@ -99,66 +106,78 @@ export function IntersectionEditor(props: {
       lon,
       movements: movementsDraft,
       ...(readCommunity.trim() ? { read_community: readCommunity.trim() } : {}),
-      ...(writeCommunity.trim() ? { write_community: writeCommunity.trim() } : {}),
-    }
+      ...(writeCommunity.trim()
+        ? { write_community: writeCommunity.trim() }
+        : {}),
+    };
     try {
-      if (target.mode === 'create') {
-        await intersectionsApi.create(draft)
+      if (target.mode === "create") {
+        await intersectionsApi.create(draft);
       } else {
-        await intersectionsApi.update(target.id!, draft)
+        await intersectionsApi.update(target.id!, draft);
       }
-      onSaved()
+      onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const remove = async () => {
-    if (target.mode !== 'edit' || !target.id) return
-    if (!window.confirm(`Remove ${name} from the network?`)) return
-    setBusy(true)
-    setError(null)
+    if (target.mode !== "edit" || !target.id) return;
+    if (!window.confirm(`Remove ${name} from the network?`)) return;
+    setBusy(true);
+    setError(null);
     try {
-      await intersectionsApi.remove(target.id)
-      onSaved()
+      await intersectionsApi.remove(target.id);
+      onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setBusy(false)
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
     }
-  }
+  };
 
   return (
     <aside className="flex h-full w-full flex-col border-l border-[var(--color-line)] bg-[var(--color-panel)] sm:w-[380px]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-4 py-3">
         <h2 className="text-base font-bold text-[var(--color-ink)]">
-          {target.mode === 'create' ? 'Create intersection' : 'Edit intersection'}
+          {target.mode === "create"
+            ? "Create intersection"
+            : "Edit intersection"}
         </h2>
         <button
           onClick={onClose}
           className="shrink-0 rounded-md p-1.5 text-[var(--color-ink-3)] hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
           aria-label="Close"
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         </button>
       </div>
 
       <div className="flex gap-1 border-b border-[var(--color-line)] px-3 pt-2">
-        {([
-          { id: 'details', label: 'Details' },
-          { id: 'movements', label: 'Movements' },
-        ] as { id: Tab; label: string }[]).map((t) => (
+        {(
+          [
+            { id: "details", label: "Details" },
+            { id: "movements", label: "Movements" },
+          ] as { id: Tab; label: string }[]
+        ).map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={clsx(
-              'rounded-t-md px-3 py-2 text-sm font-medium transition-colors',
+              "rounded-t-md px-3 py-2 text-sm font-medium transition-colors",
               tab === t.id
-                ? 'border-b-2 border-[var(--color-accent)] text-[var(--color-ink)]'
-                : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink-2)]',
+                ? "border-b-2 border-[var(--color-accent)] text-[var(--color-ink)]"
+                : "text-[var(--color-ink-3)] hover:text-[var(--color-ink-2)]",
             )}
           >
             {t.label}
@@ -167,196 +186,203 @@ export function IntersectionEditor(props: {
       </div>
 
       <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
-        {tab === 'movements' ? (
+        {tab === "movements" ? (
           <MovementsPanel
             info={{
-              id: target.id ?? '',
-              name: name.trim() || 'New intersection',
+              id: target.id ?? "",
+              name: name.trim() || "New intersection",
               lat,
               lon,
-              connection: 'disconnected',
+              connection: "disconnected",
               static: null,
             }}
             draft={movementsDraft}
             onChangeDraft={setMovementsDraft}
             onSave={save}
             onDiscard={() => setMovementsDraft(target.movements ?? [])}
-            dirty={JSON.stringify(movementsDraft) !== JSON.stringify(target.movements ?? [])}
+            dirty={
+              JSON.stringify(movementsDraft) !==
+              JSON.stringify(target.movements ?? [])
+            }
             saving={busy}
             error={error}
           />
         ) : (
           <>
-        <Field label="Name">
-          <input
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Main St & 3rd Ave"
-          />
-        </Field>
+            <Field label="Name">
+              <input
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Main St & 3rd Ave"
+              />
+            </Field>
 
-        <Field label="Location">
-          {picking ? (
-            <div className="text-xs text-[var(--color-accent)]">
-              Drag the pin on the map to position it, then confirm.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {lat != null && lon != null && (
-                <div className="flex items-center justify-between text-xs text-[var(--color-ink-2)]">
-                  <span className="tabular">
-                    {lat.toFixed(5)}, {lon.toFixed(5)}
-                  </span>
+            <Field label="Location">
+              {picking ? (
+                <div className="text-xs text-[var(--color-accent)]">
+                  Drag the pin on the map to position it, then confirm.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {lat != null && lon != null && (
+                    <div className="flex items-center justify-between text-xs text-[var(--color-ink-2)]">
+                      <span className="tabular">
+                        {lat.toFixed(5)}, {lon.toFixed(5)}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-[var(--color-accent)] hover:underline"
+                        onClick={() => {
+                          setLat(null);
+                          setLon(null);
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
                   <button
                     type="button"
-                    className="text-[var(--color-accent)] hover:underline"
-                    onClick={() => {
-                      setLat(null)
-                      setLon(null)
-                    }}
+                    onClick={onPickLocation}
+                    className="w-full rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]"
                   >
-                    Clear
+                    {lat != null && lon != null
+                      ? "Re-pin on map"
+                      : "Pin on map"}
                   </button>
+                  {lat == null && lon == null && (
+                    <div className="text-xs text-[var(--color-ink-3)]">
+                      Not pinned. Pin on the map, or leave unpinned to add it
+                      off-map for now.
+                    </div>
+                  )}
                 </div>
               )}
-              <button
-                type="button"
-                onClick={onPickLocation}
-                className="w-full rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]"
+            </Field>
+
+            <Field label="IP address / host">
+              <input
+                className="input"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+                placeholder="10.42.0.2"
+              />
+            </Field>
+
+            <Field label="Port">
+              <input
+                className="input"
+                value={port}
+                onChange={(e) => setPort(e.target.value)}
+                placeholder="161"
+                inputMode="numeric"
+              />
+            </Field>
+
+            <Field label="Device API">
+              <select
+                className="input"
+                value={deviceType}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.startsWith("docker:")) {
+                    const n = v.slice("docker:".length);
+                    setHost(`emulator-${n}`);
+                    setPort("161");
+                    setDeviceType("maxtime");
+                    return;
+                  }
+                  setDeviceType(v as DeviceType);
+                }}
               >
-                {lat != null && lon != null ? 'Re-pin on map' : 'Pin on map'}
-              </button>
-              {lat == null && lon == null && (
-                <div className="text-xs text-[var(--color-ink-3)]">
-                  Not pinned. Pin on the map, or leave unpinned to add it
-                  off-map for now.
+                {(["maxtime", "econolite", "siemens"] as DeviceType[]).map(
+                  (dt) => {
+                    const enabled = supported.includes(dt);
+                    return (
+                      <option key={dt} value={dt} disabled={!enabled}>
+                        {DEVICE_LABEL[dt]}
+                        {enabled ? "" : " (coming soon)"}
+                      </option>
+                    );
+                  },
+                )}
+                {target.mode === "create" && (
+                  <optgroup label="Docker emulator (autofills host/port)">
+                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={`docker:${n}`}>
+                        docker-emulator-{n}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </Field>
+
+            <Field label="SNMP communities (optional)">
+              <div className="space-y-2">
+                <input
+                  className="input"
+                  value={readCommunity}
+                  onChange={(e) => setReadCommunity(e.target.value)}
+                  placeholder="Read community (blank = server default)"
+                  autoComplete="off"
+                />
+                <input
+                  className="input"
+                  type="password"
+                  value={writeCommunity}
+                  onChange={(e) => setWriteCommunity(e.target.value)}
+                  placeholder="Write community (blank = server default)"
+                  autoComplete="new-password"
+                />
+                <div className="text-[10px] text-[var(--color-ink-3)]">
+                  Stored server-side outside the committed config. Blank keeps
+                  the current value.
+                </div>
+              </div>
+            </Field>
+
+            <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-[var(--color-ink-2)]">
+                  Check the device answers SNMP before saving.
+                </div>
+                <button
+                  type="button"
+                  disabled={probing || !host.trim()}
+                  onClick={testConnection}
+                  className="shrink-0 rounded-md border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel)] disabled:opacity-40"
+                >
+                  {probing ? "Testing..." : "Test connection"}
+                </button>
+              </div>
+              {probeResult && (
+                <div
+                  className={
+                    probeResult.ok
+                      ? "mt-2 rounded-md border border-[var(--color-online)]/30 bg-[var(--color-online)]/10 px-3 py-2 text-xs text-[var(--color-online)]"
+                      : "mt-2 rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]"
+                  }
+                >
+                  {probeResult.ok
+                    ? `Connected: ${probeResult.sys_descr || "device answered"}`
+                    : `No response: ${probeResult.error}`}
                 </div>
               )}
             </div>
-          )}
-        </Field>
 
-        <Field label="IP address / host">
-          <input
-            className="input"
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            placeholder="10.42.0.2"
-          />
-        </Field>
-
-        <Field label="Port">
-          <input
-            className="input"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-            placeholder="161"
-            inputMode="numeric"
-          />
-        </Field>
-
-        <Field label="Device API">
-          <select
-            className="input"
-            value={deviceType}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v.startsWith('docker:')) {
-                const n = v.slice('docker:'.length)
-                setHost(`emulator-${n}`)
-                setPort('161')
-                setDeviceType('maxtime')
-                return
-              }
-              setDeviceType(v as DeviceType)
-            }}
-          >
-            {(['maxtime', 'econolite', 'siemens'] as DeviceType[]).map((dt) => {
-              const enabled = supported.includes(dt)
-              return (
-                <option key={dt} value={dt} disabled={!enabled}>
-                  {DEVICE_LABEL[dt]}
-                  {enabled ? '' : ' (coming soon)'}
-                </option>
-              )
-            })}
-            {target.mode === 'create' && (
-              <optgroup label="Docker emulator (autofills host/port)">
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={`docker:${n}`}>
-                    docker-emulator-{n}
-                  </option>
-                ))}
-              </optgroup>
+            {error && (
+              <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]">
+                {error}
+              </div>
             )}
-          </select>
-        </Field>
-
-        <Field label="SNMP communities (optional)">
-          <div className="space-y-2">
-            <input
-              className="input"
-              value={readCommunity}
-              onChange={(e) => setReadCommunity(e.target.value)}
-              placeholder="Read community (blank = server default)"
-              autoComplete="off"
-            />
-            <input
-              className="input"
-              type="password"
-              value={writeCommunity}
-              onChange={(e) => setWriteCommunity(e.target.value)}
-              placeholder="Write community (blank = server default)"
-              autoComplete="new-password"
-            />
-            <div className="text-[10px] text-[var(--color-ink-3)]">
-              Stored server-side outside the committed config. Blank keeps the
-              current value.
-            </div>
-          </div>
-        </Field>
-
-        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-[var(--color-ink-2)]">
-              Check the device answers SNMP before saving.
-            </div>
-            <button
-              type="button"
-              disabled={probing || !host.trim()}
-              onClick={testConnection}
-              className="shrink-0 rounded-md border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel)] disabled:opacity-40"
-            >
-              {probing ? 'Testing...' : 'Test connection'}
-            </button>
-          </div>
-          {probeResult && (
-            <div
-              className={
-                probeResult.ok
-                  ? 'mt-2 rounded-md border border-[var(--color-online)]/30 bg-[var(--color-online)]/10 px-3 py-2 text-xs text-[var(--color-online)]'
-                  : 'mt-2 rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]'
-              }
-            >
-              {probeResult.ok
-                ? `Connected: ${probeResult.sys_descr || 'device answered'}`
-                : `No response: ${probeResult.error}`}
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]">
-            {error}
-          </div>
-        )}
           </>
         )}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-[var(--color-line)] p-3">
-        {target.mode === 'edit' ? (
+        {target.mode === "edit" ? (
           <button
             type="button"
             disabled={busy}
@@ -382,12 +408,12 @@ export function IntersectionEditor(props: {
             onClick={save}
             className="rounded-lg bg-[var(--color-accent)] px-3.5 py-2 text-xs font-semibold text-black hover:brightness-110 disabled:opacity-40"
           >
-            {target.mode === 'create' ? 'Create' : 'Save'}
+            {target.mode === "create" ? "Create" : "Save"}
           </button>
         </div>
       </div>
     </aside>
-  )
+  );
 }
 
 function Field(props: { label: string; children: React.ReactNode }) {
@@ -398,19 +424,19 @@ function Field(props: { label: string; children: React.ReactNode }) {
       </span>
       {props.children}
     </label>
-  )
+  );
 }
 
 export function draftFromInfo(info: IntersectionInfo): EditorTarget {
   return {
-    mode: 'edit',
+    mode: "edit",
     id: info.id,
     name: info.name,
-    host: info.host ?? '',
+    host: info.host ?? "",
     port: info.port ?? 161,
-    device_type: info.device_type ?? 'maxtime',
+    device_type: info.device_type ?? "maxtime",
     lat: info.lat,
     lon: info.lon,
     movements: info.movements ?? [],
-  }
+  };
 }

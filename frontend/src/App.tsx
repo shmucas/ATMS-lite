@@ -1,39 +1,45 @@
-import { useEffect, useState } from 'react'
-import { ActivityDrawer } from './components/ActivityDrawer'
-import { DetailDrawer } from './components/DetailDrawer'
-import { draftFromInfo, IntersectionEditor, type EditorTarget } from './components/IntersectionEditor'
-import { SignalMap } from './components/SignalMap'
-import { TopBar } from './components/TopBar'
-import { intersectionsApi } from './lib/intersections'
-import { useAtmsStream } from './lib/stream'
+import { useEffect, useState } from "react";
+import { ActivityDrawer } from "./components/ActivityDrawer";
+import { DetailDrawer } from "./components/DetailDrawer";
+import {
+  draftFromInfo,
+  IntersectionEditor,
+  type EditorTarget,
+} from "./components/IntersectionEditor";
+import { SignalMap } from "./components/SignalMap";
+import { TopBar } from "./components/TopBar";
+import { intersectionsApi } from "./lib/intersections";
+import { useAtmsStream } from "./lib/stream";
 
 export function App() {
-  const stream = useAtmsStream()
-  const [selected, setSelected] = useState<string | null>(null)
-  const [editor, setEditor] = useState<EditorTarget | null>(null)
-  const [picking, setPicking] = useState(false)
-  const [activityOpen, setActivityOpen] = useState(false)
+  const stream = useAtmsStream();
+  const [selected, setSelected] = useState<string | null>(null);
+  const [editor, setEditor] = useState<EditorTarget | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
     if (selected && !stream.intersections.some((i) => i.id === selected)) {
-      setSelected(null)
+      setSelected(null);
     }
-  }, [selected, stream.intersections])
+  }, [selected, stream.intersections]);
 
-  const backendDown = !stream.wsConnected
-  const unpinned = stream.intersections.filter((i) => i.lat == null || i.lon == null)
+  const backendDown = !stream.wsConnected;
+  const unpinned = stream.intersections.filter(
+    (i) => i.lat == null || i.lon == null,
+  );
 
   const deleteIntersection = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from the network?`)) return
+    if (!window.confirm(`Remove ${name} from the network?`)) return;
     try {
-      await intersectionsApi.remove(id)
-      if (selected === id) setSelected(null)
-      if (editor?.id === id) setEditor(null)
+      await intersectionsApi.remove(id);
+      if (selected === id) setSelected(null);
+      if (editor?.id === id) setEditor(null);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e))
+      window.alert(e instanceof Error ? e.message : String(e));
     }
-  }
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -42,16 +48,16 @@ export function App() {
         activityOpen={activityOpen}
         onToggleActivity={() => setActivityOpen((v) => !v)}
         onAddIntersection={() => {
-          setPicking(false)
+          setPicking(false);
           setEditor({
-            mode: 'create',
-            name: '',
-            host: '',
+            mode: "create",
+            name: "",
+            host: "",
             port: 161,
-            device_type: 'maxtime',
+            device_type: "maxtime",
             lat: null,
             lon: null,
-          })
+          });
         }}
       />
 
@@ -68,8 +74,8 @@ export function App() {
               stream={stream}
               onClose={() => setActivityOpen(false)}
               onSelect={(id) => {
-                setEditor(null)
-                setSelected(id)
+                setEditor(null);
+                setSelected(id);
               }}
             />
           </div>
@@ -80,22 +86,22 @@ export function App() {
             selected={selected}
             onSelect={setSelected}
             onCreateAt={(lat, lon) => {
-              setSelected(null)
+              setSelected(null);
               setEditor({
-                mode: 'create',
-                name: '',
-                host: '',
+                mode: "create",
+                name: "",
+                host: "",
                 port: 161,
-                device_type: 'maxtime',
+                device_type: "maxtime",
                 lat,
                 lon,
-              })
+              });
             }}
             onDeleteIntersection={deleteIntersection}
             pickMode={picking}
             onPick={(lat, lon) => {
-              setPicking(false)
-              setEditor((e) => (e ? { ...e, lat, lon } : e))
+              setPicking(false);
+              setEditor((e) => (e ? { ...e, lat, lon } : e));
             }}
             onCancelPick={() => setPicking(false)}
           />
@@ -116,8 +122,8 @@ export function App() {
                     key={i.id}
                     type="button"
                     onClick={() => {
-                      setSelected(null)
-                      setEditor(draftFromInfo(i))
+                      setSelected(null);
+                      setEditor(draftFromInfo(i));
                     }}
                     className="block w-full truncate rounded-md px-1.5 py-1 text-left hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
                   >
@@ -139,7 +145,9 @@ export function App() {
                 label="Online"
                 count={
                   stream.intersections.filter(
-                    (i) => i.connection === 'connected' || i.connection === 'degraded',
+                    (i) =>
+                      i.connection === "connected" ||
+                      i.connection === "degraded",
                   ).length
                 }
               />
@@ -148,18 +156,24 @@ export function App() {
                 label="Offline"
                 count={
                   stream.intersections.filter(
-                    (i) => i.connection === 'disconnected' || i.connection === 'unsupported',
+                    (i) =>
+                      i.connection === "disconnected" ||
+                      i.connection === "unsupported",
                   ).length
                 }
               />
               {/* Transient boot state: without its own row these pins count
                   in neither bucket and the legend total comes up short. */}
-              {stream.intersections.some((i) => i.connection === 'starting') && (
+              {stream.intersections.some(
+                (i) => i.connection === "starting",
+              ) && (
                 <Legend
                   color="var(--color-ink-3)"
                   label="Starting"
                   count={
-                    stream.intersections.filter((i) => i.connection === 'starting').length
+                    stream.intersections.filter(
+                      (i) => i.connection === "starting",
+                    ).length
                   }
                 />
               )}
@@ -175,12 +189,12 @@ export function App() {
             <IntersectionEditor
               target={editor}
               onClose={() => {
-                setPicking(false)
-                setEditor(null)
+                setPicking(false);
+                setEditor(null);
               }}
               onSaved={() => {
-                setPicking(false)
-                setEditor(null)
+                setPicking(false);
+                setEditor(null);
               }}
               onPickLocation={() => setPicking(true)}
               picking={picking}
@@ -194,8 +208,10 @@ export function App() {
                 id={selected}
                 onClose={() => setSelected(null)}
                 onEdit={() => {
-                  const info = stream.intersections.find((i) => i.id === selected)
-                  if (info) setEditor(draftFromInfo(info))
+                  const info = stream.intersections.find(
+                    (i) => i.id === selected,
+                  );
+                  if (info) setEditor(draftFromInfo(info));
                 }}
               />
             </div>
@@ -203,10 +219,18 @@ export function App() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
-function Legend({ color, label, count }: { color: string; label: string; count: number }) {
+function Legend({
+  color,
+  label,
+  count,
+}: {
+  color: string;
+  label: string;
+  count: number;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
@@ -214,5 +238,5 @@ function Legend({ color, label, count }: { color: string; label: string; count: 
         {label} <span className="text-[var(--color-ink-3)]">({count})</span>
       </span>
     </div>
-  )
+  );
 }
