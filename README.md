@@ -1,11 +1,11 @@
 # ATMS-lite
 
 A locally hosted Advanced Traffic Management System that talks NTCIP 1202 over
-SNMP to a physical Q-Free MaxTime 2070 traffic controller, scales to many
-intersections through lightweight virtual controllers, and drives a live React
+SNMP to a physical Q-Free MaxTime 2070 traffic controller, (with upcoming support for EOS, ASC/3, Siemens, and Swarco MCCain) scales to many
+intersections through either user creation on the mini map or lightweight simulated docker virtual controllers, and drives a live intersection signal status
 dashboard.
 
-Built and verified end to end against real hardware.
+Built and verified end to end against real hardware. (My test bench controller)
 
 ![ATMS-lite dashboard: map view with an intersection's live signal status, ring-and-barrier diagram, and satellite mini-map of its lane movements](docs/images/dashboard.png)
 
@@ -18,11 +18,10 @@ Built and verified end to end against real hardware.
   ring and concurrency configuration, not a template. Click a phase to place a
   call.
 - **Control path with safety interlocks.** Vehicle and ped calls are written to
-  the controller only when an intersection is explicitly armed. Calls auto-clear
-  on disarm, disconnect, and shutdown. Every write is audited. Control endpoints
-  can require a token.
+  the controller only when an intersection is explicitly ON. Calls auto-clear
+  on user request, disconnect, and shutdown. Every call is audited. 
 - **Coordination monitor.** Pattern and a cycle length measured from the signal
-  stream itself (the controller runs actuated, so the cycle varies).
+  phase status. 
 - **Detector and MOE stats.** Detector volume/occupancy plus per-phase green
   utilization computed from the signal stream.
 - **Map and weather.** OpenStreetMap via Leaflet, pins colored by connection
@@ -62,7 +61,7 @@ already taken, and waits for the service to actually respond before
 returning. Use `--fg` on either to run in the foreground instead of
 backgrounded.
 
-`tools/start_stack.sh` starts both and opens the dashboard in your
+`tools/start_stack.sh` starts both frontend and backend services and opens the dashboard in your
 browser. Pass `--no-open` to skip opening the browser.
 
 A virtual controller for testing without hardware:
@@ -82,7 +81,7 @@ Registering one of those emulators as an intersection doesn't require typing
 its host/port by hand: the "Add intersection" form's "Device API" dropdown
 lists `docker-emulator-1..10` alongside the real device protocols - picking
 one autofills host and port for you, since emulator container IPs aren't
-stable across restarts and only the Compose service name (`emulator-N`) is.
+stable across restarts and only the Compose service name (`emulator-N`).
 
 ## Layout
 
@@ -103,8 +102,4 @@ docs/       network runbook, OID reference, milestone log, docker guide
 - [docs/milestones.md](docs/milestones.md) - the gated build log, M0-M9
 - [docs/docker.md](docs/docker.md) - the containerized stack
 
-## Safety
 
-Developed against a standalone bench controller. Control writes sit behind a
-server-side arm/disarm interlock, auto-clear on any loss of visibility, and are
-audited. Do not point the control path at field equipment.
