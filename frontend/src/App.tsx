@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ActivityDrawer } from './components/ActivityDrawer'
 import { DetailDrawer, type MovementEditorState } from './components/DetailDrawer'
 import { draftFromInfo, IntersectionEditor, type EditorTarget } from './components/IntersectionEditor'
 import { SignalMap } from './components/SignalMap'
@@ -13,6 +14,7 @@ export function App() {
   const [editor, setEditor] = useState<EditorTarget | null>(null)
   const [picking, setPicking] = useState(false)
   const [movementEditor, setMovementEditor] = useState<MovementEditorState | null>(null)
+  const [activityOpen, setActivityOpen] = useState(false)
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -65,6 +67,8 @@ export function App() {
     <div className="flex h-full flex-col">
       <TopBar
         stream={stream}
+        activityOpen={activityOpen}
+        onToggleActivity={() => setActivityOpen((v) => !v)}
         onAddIntersection={() => {
           setPicking(false)
           setEditor({
@@ -86,6 +90,18 @@ export function App() {
       )}
 
       <div className="relative flex min-h-0 flex-1">
+        {activityOpen && (
+          <div className="absolute inset-y-0 left-0 z-[600] sm:relative">
+            <ActivityDrawer
+              stream={stream}
+              onClose={() => setActivityOpen(false)}
+              onSelect={(id) => {
+                setEditor(null)
+                setSelected(id)
+              }}
+            />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <SignalMap
             stream={stream}

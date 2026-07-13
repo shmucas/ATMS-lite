@@ -48,6 +48,28 @@ INTERSECTIONS_PATH = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',
 AUDIT_LOG_PATH = pathlib.Path(ENV.get(
     'ATMS_AUDIT_LOG', ROOT / 'docs' / 'backups' / 'control-audit.jsonl'))
 
+# Per-intersection SNMP community overrides live in a gitignored sidecar,
+# keyed by intersection id, because intersections.json is committed to a
+# public repo and must never carry a community string.
+COMMUNITIES_PATH = pathlib.Path(ENV.get(
+    'ATMS_COMMUNITIES', ROOT / 'backend' / 'communities.local.json'))
+
+
+def read_communities():
+    if not COMMUNITIES_PATH.exists():
+        return {}
+    try:
+        return json.loads(COMMUNITIES_PATH.read_text())
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f'{COMMUNITIES_PATH} is not valid JSON ({exc}).') from exc
+
+
+def write_communities(overrides):
+    tmp = COMMUNITIES_PATH.with_name(COMMUNITIES_PATH.name + '.tmp')
+    tmp.write_text(json.dumps(overrides, indent=2) + '\n')
+    os.replace(tmp, COMMUNITIES_PATH)
+
 # Device APIs the backend actually knows how to poll/control. Any other value
 # can be stored (so the UI can save the intersection) but no poller starts.
 SUPPORTED_DEVICE_TYPES = {'maxtime'}
@@ -96,6 +118,10 @@ def normalize_movements(raw):
 
 
 def normalize_intersection(item):
+    # Community precedence: explicit item value (legacy, discouraged in the
+    # committed file), then the gitignored per-intersection sidecar, then
+    # the global .env defaults.
+    override = read_communities().get(item['id'], {})
     return {
         'id': item['id'],
         'name': item.get('name', item['id']),
@@ -103,10 +129,13 @@ def normalize_intersection(item):
         'port': int(item.get('port', 161)),
         'device_type': item.get('device_type', 'maxtime'),
         'read_community': item.get(
-            'read_community', ENV.get('ATMS_SNMP_READ_COMMUNITY', 'public')),
+            'read_community',
+            override.get('read_community',
+                         ENV.get('ATMS_SNMP_READ_COMMUNITY', 'public'))),
         'write_community': item.get(
             'write_community',
-            ENV.get('ATMS_SNMP_WRITE_COMMUNITY', 'public')),
+            override.get('write_community',
+                         ENV.get('ATMS_SNMP_WRITE_COMMUNITY', 'public'))),
         'lat': item.get('lat'),
         'lon': item.get('lon'),
         # How many 8-phase status groups to poll each cycle. MaxTime

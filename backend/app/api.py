@@ -8,11 +8,14 @@ from typing import Literal
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field, StrictInt
 
-from .config import (CONTROL_TOKEN, SUPPORTED_DEVICE_TYPES,
+from . import ntcip
+from .config import (CONTROL_TOKEN, ENV, SUPPORTED_DEVICE_TYPES,
                      normalize_intersection, normalize_movements,
-                     read_raw_intersections, write_raw_intersections)
+                     read_communities, read_raw_intersections,
+                     write_communities, write_raw_intersections)
 from .control import ControlError
 from .registry import start_intersection, stop_intersection
+from .snmp import SnmpClient, SnmpError
 
 router = APIRouter()
 
@@ -39,6 +42,10 @@ class IntersectionCreate(BaseModel):
     lon: float | None = Field(default=None, strict=True)
     poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
     movements: list | None = None
+    # Stored in the gitignored communities sidecar, never in
+    # intersections.json (public repo).
+    read_community: str | None = None
+    write_community: str | None = None
 
 
 class IntersectionUpdate(BaseModel):
@@ -51,6 +58,14 @@ class IntersectionUpdate(BaseModel):
     lon: float | None = Field(default=None, strict=True)
     poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
     movements: list | None = None
+    read_community: str | None = None
+    write_community: str | None = None
+
+
+class ProbeBody(BaseModel):
+    host: str
+    port: StrictInt = Field(default=161, ge=1, le=65535)
+    read_community: str | None = None
 
 _SLUG_RE = re.compile(r'[^a-z0-9]+')
 
@@ -69,6 +84,28 @@ _CONNECTION_KEYS = ('host', 'port', 'device_type', 'read_community',
 def _slugify(name):
     slug = _SLUG_RE.sub('-', name.strip().lower()).strip('-')
     return slug or 'intersection'
+
+
+def _store_communities(iid, read_community, write_community):
+    """Persist non-empty community overrides to the gitignored sidecar.
+    Blank or absent means keep whatever is already configured."""
+    updates = {}
+    if read_community and read_community.strip():
+        updates['read_community'] = read_community.strip()
+    if write_community and write_community.strip():
+        updates['write_community'] = write_community.strip()
+    if not updates:
+        return
+    overrides = read_communities()
+    overrides.setdefault(iid, {}).update(updates)
+    write_communities(overrides)
+
+
+def _drop_communities(iid):
+    overrides = read_communities()
+    if iid in overrides:
+        del overrides[iid]
+        write_communities(overrides)
 
 
 def _unique_id(base, existing_ids):
@@ -149,6 +186,43 @@ def device_types():
 def intersections(request: Request):
     hub = request.app.state.hub
     return [_summary(p, hub) for p in request.app.state.pollers.values()]
+
+
+@router.post('/api/probe')
+async def probe(body: ProbeBody, x_control_token: str = Header(default='')):
+    """One-shot reachability check for the add/edit form: a single SNMP v1
+    GET with a short timeout, so a typo'd address fails in the form instead
+    of as a forever-grey pin."""
+    _require_control_token(x_control_token)
+    host = body.host.strip()
+    if not host:
+        raise HTTPException(422, 'host is required')
+    community = ((body.read_community or '').strip()
+                 or ENV.get('ATMS_SNMP_READ_COMMUNITY', 'public'))
+    client = SnmpClient(host, body.port, community, timeout=1.5, retries=0)
+    try:
+        values = await client.get(
+            [ntcip.SYS_DESCR, ntcip.SYS_UPTIME, ntcip.MAX_PHASES])
+    except SnmpError as exc:
+        return {'ok': False,
+                'error': str(exc) or 'no response before timeout'}
+    except Exception as exc:
+        # pysnmp wraps resolver/socket failures in its own error types; a
+        # probe should report them, never 500.
+        return {'ok': False, 'error': str(exc)}
+    descr = values.get(ntcip.SYS_DESCR, '')
+    def as_int(oid):
+        try:
+            return int(values.get(oid))
+        except (TypeError, ValueError):
+            return None
+    return {
+        'ok': True,
+        'sys_descr': (descr.prettyPrint()
+                      if hasattr(descr, 'prettyPrint') else str(descr)),
+        'uptime_ticks': as_int(ntcip.SYS_UPTIME),
+        'max_phases': as_int(ntcip.MAX_PHASES),
+    }
 
 
 @router.get('/api/intersections/{iid}/status')
@@ -260,6 +334,8 @@ async def create_intersection(request: Request, body: IntersectionCreate,
             item['poll_groups'] = body.poll_groups
         if body.movements is not None:
             item['movements'] = normalize_movements(body.movements)
+        # Before normalize_intersection, which reads the sidecar back.
+        _store_communities(iid, body.read_community, body.write_community)
         cfg = normalize_intersection(item)
 
         raw.append(item)
@@ -300,6 +376,10 @@ async def update_intersection(iid: str, request: Request,
             # normalize_movements(None) is [], so movements: null clears.
             item['movements'] = normalize_movements(data['movements'])
 
+        # After old_cfg, before the new normalize: a community change then
+        # shows up as a connection-key diff and restarts the poller.
+        _store_communities(iid, data.get('read_community'),
+                           data.get('write_community'))
         cfg = normalize_intersection(item)
         write_raw_intersections(raw)
 
@@ -331,6 +411,7 @@ async def delete_intersection(iid: str, request: Request,
             raise HTTPException(404, f'unknown intersection {iid}')
         raw = [i for i in raw if i['id'] != iid]
         write_raw_intersections(raw)
+        _drop_communities(iid)
         await stop_intersection(request.app, iid)
     request.app.state.hub.publish_intersection_removed(iid)
     return {'id': iid, 'deleted': True}

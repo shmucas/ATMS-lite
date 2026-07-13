@@ -10,6 +10,18 @@ export interface IntersectionDraft {
   device_type: DeviceType
   lat?: number | null
   lon?: number | null
+  /* Optional per-intersection SNMP communities. The backend stores them in
+     a gitignored sidecar; blank means keep the current/default value. */
+  read_community?: string
+  write_community?: string
+}
+
+export interface ProbeResult {
+  ok: boolean
+  error?: string
+  sys_descr?: string
+  uptime_ticks?: number | null
+  max_phases?: number | null
 }
 
 async function request(method: string, path: string, body?: unknown) {
@@ -43,4 +55,9 @@ export const intersectionsApi = {
     request('PUT', `/api/intersections/${id}`, { movements }),
   deviceTypes: (): Promise<{ supported: DeviceType[]; all: DeviceType[] }> =>
     request('GET', '/api/device-types'),
+  probe: (body: {
+    host: string
+    port?: number
+    read_community?: string
+  }): Promise<ProbeResult> => request('POST', '/api/probe', body),
 }

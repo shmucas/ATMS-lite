@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { intersectionsApi } from '../lib/intersections'
+import { intersectionsApi, type ProbeResult } from '../lib/intersections'
 import type { DeviceType, IntersectionInfo } from '../types'
 
 const DEVICE_LABEL: Record<DeviceType, string> = {
@@ -33,9 +33,13 @@ export function IntersectionEditor(props: {
   const [deviceType, setDeviceType] = useState<DeviceType>(target.device_type)
   const [lat, setLat] = useState(target.lat)
   const [lon, setLon] = useState(target.lon)
+  const [readCommunity, setReadCommunity] = useState('')
+  const [writeCommunity, setWriteCommunity] = useState('')
   const [supported, setSupported] = useState<DeviceType[]>(['maxtime'])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [probing, setProbing] = useState(false)
+  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
 
   useEffect(() => {
     intersectionsApi
@@ -51,6 +55,27 @@ export function IntersectionEditor(props: {
     setLon(target.lon)
   }, [target.lat, target.lon])
 
+  const testConnection = async () => {
+    if (!host.trim()) {
+      setProbeResult({ ok: false, error: 'Enter a host/IP first.' })
+      return
+    }
+    setProbing(true)
+    setProbeResult(null)
+    try {
+      const result = await intersectionsApi.probe({
+        host: host.trim(),
+        port: Number(port) || 161,
+        ...(readCommunity.trim() ? { read_community: readCommunity.trim() } : {}),
+      })
+      setProbeResult(result)
+    } catch (e) {
+      setProbeResult({ ok: false, error: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setProbing(false)
+    }
+  }
+
   const save = async () => {
     if (!name.trim() || !host.trim()) {
       setError('Name and host/IP are required.')
@@ -65,6 +90,8 @@ export function IntersectionEditor(props: {
       device_type: deviceType,
       lat,
       lon,
+      ...(readCommunity.trim() ? { read_community: readCommunity.trim() } : {}),
+      ...(writeCommunity.trim() ? { write_community: writeCommunity.trim() } : {}),
     }
     try {
       if (target.mode === 'create') {
@@ -217,6 +244,59 @@ export function IntersectionEditor(props: {
             )}
           </select>
         </Field>
+
+        <Field label="SNMP communities (optional)">
+          <div className="space-y-2">
+            <input
+              className="input"
+              value={readCommunity}
+              onChange={(e) => setReadCommunity(e.target.value)}
+              placeholder="Read community (blank = server default)"
+              autoComplete="off"
+            />
+            <input
+              className="input"
+              type="password"
+              value={writeCommunity}
+              onChange={(e) => setWriteCommunity(e.target.value)}
+              placeholder="Write community (blank = server default)"
+              autoComplete="new-password"
+            />
+            <div className="text-[10px] text-[var(--color-ink-3)]">
+              Stored server-side outside the committed config. Blank keeps the
+              current value.
+            </div>
+          </div>
+        </Field>
+
+        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-panel-2)] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs text-[var(--color-ink-2)]">
+              Check the device answers SNMP before saving.
+            </div>
+            <button
+              type="button"
+              disabled={probing || !host.trim()}
+              onClick={testConnection}
+              className="shrink-0 rounded-md border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel)] disabled:opacity-40"
+            >
+              {probing ? 'Testing...' : 'Test connection'}
+            </button>
+          </div>
+          {probeResult && (
+            <div
+              className={
+                probeResult.ok
+                  ? 'mt-2 rounded-md border border-[var(--color-online)]/30 bg-[var(--color-online)]/10 px-3 py-2 text-xs text-[var(--color-online)]'
+                  : 'mt-2 rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]'
+              }
+            >
+              {probeResult.ok
+                ? `Connected: ${probeResult.sys_descr || 'device answered'}`
+                : `No response: ${probeResult.error}`}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]">

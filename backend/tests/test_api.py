@@ -15,6 +15,8 @@ from app import main as main_mod
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'INTERSECTIONS_PATH',
                         tmp_path / 'intersections.json')
+    monkeypatch.setattr(config, 'COMMUNITIES_PATH',
+                        tmp_path / 'communities.local.json')
     monkeypatch.setattr(main_mod, 'AUDIT_LOG_PATH', tmp_path / 'audit.jsonl')
     with TestClient(main_mod.app) as test_client:
         yield test_client
@@ -95,3 +97,41 @@ def test_control_endpoints_404_unknown_intersection(client):
 def test_update_nonexistent_404(client):
     assert client.put('/api/intersections/nope',
                       json={'name': 'x'}).status_code == 404
+
+
+def test_communities_go_to_sidecar_not_config(client):
+    created = client.post('/api/intersections', json={
+        **UNSUPPORTED, 'read_community': 'r-secret',
+        'write_community': 'w-secret',
+    }).json()
+    iid = created['id']
+
+    # The committed config file must never contain a community string.
+    raw = config.INTERSECTIONS_PATH.read_text()
+    assert 'secret' not in raw
+    assert config.read_communities()[iid] == {
+        'read_community': 'r-secret', 'write_community': 'w-secret'}
+    # And they never leak into API summaries.
+    assert 'read_community' not in created and 'write_community' not in created
+
+    # Blank on update means keep; a new value replaces.
+    client.put(f'/api/intersections/{iid}', json={'write_community': 'w2'})
+    assert config.read_communities()[iid] == {
+        'read_community': 'r-secret', 'write_community': 'w2'}
+
+    # Delete removes the override with the intersection.
+    client.delete(f'/api/intersections/{iid}')
+    assert iid not in config.read_communities()
+
+
+def test_probe_validation_and_unreachable(client):
+    assert client.post('/api/probe', json={}).status_code == 422
+    assert client.post('/api/probe',
+                       json={'host': 'h', 'port': 0}).status_code == 422
+    # Nothing listens on this port: a clean ok:false, not a 500.
+    res = client.post('/api/probe',
+                      json={'host': '127.0.0.1', 'port': 39999})
+    assert res.status_code == 200
+    body = res.json()
+    assert body['ok'] is False
+    assert body['error']

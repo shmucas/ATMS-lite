@@ -56,9 +56,13 @@ function Stat(props: { value: number; label: string; color: string }) {
 export function TopBar({
   stream,
   onAddIntersection,
+  onToggleActivity,
+  activityOpen,
 }: {
   stream: StreamState
   onAddIntersection: () => void
+  onToggleActivity: () => void
+  activityOpen: boolean
 }) {
   const ix = stream.intersections
   const online = ix.filter((i) => i.connection === 'connected').length
@@ -104,6 +108,17 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={onToggleActivity}
+          className={
+            activityOpen
+              ? 'rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)]'
+              : 'rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+          }
+        >
+          Activity
+        </button>
         <button
           type="button"
           onClick={onAddIntersection}

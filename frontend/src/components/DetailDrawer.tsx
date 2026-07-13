@@ -53,11 +53,18 @@ function SignalsTab(props: {
   const [phaseInput, setPhaseInput] = useState('1')
   const forcedPhase = props.control?.forced_phase ?? null
   const holds = props.control?.holds ?? {}
+  const pedCalls = props.control?.ped_calls ?? {}
   const phaseNum = parseInt(phaseInput, 10)
   const validPhase = Number.isInteger(phaseNum) && phaseNum >= 1
-  const phaseHeld = validPhase
-    ? Boolean((holds[String(((phaseNum - 1) >> 3) + 1)] ?? 0) & (1 << ((phaseNum - 1) % 8)))
-    : false
+  const maskBit = (masks: Record<string, number>) =>
+    validPhase
+      ? Boolean(
+          (masks[String(((phaseNum - 1) >> 3) + 1)] ?? 0) &
+            (1 << ((phaseNum - 1) % 8)),
+        )
+      : false
+  const phaseHeld = maskBit(holds)
+  const pedCalled = maskBit(pedCalls)
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -186,6 +193,21 @@ function SignalsTab(props: {
               )}
             >
               {forcedPhase === phaseNum ? 'Release force' : 'Force phase'}
+            </button>
+            <button
+              type="button"
+              disabled={busy || !validPhase || info.connection === 'disconnected'}
+              onClick={() =>
+                run(() => control.call(info.id, 'ped', phaseNum, !pedCalled))
+              }
+              className={clsx(
+                'rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40',
+                pedCalled
+                  ? 'bg-[var(--color-degraded)] text-black hover:brightness-110'
+                  : 'border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]',
+              )}
+            >
+              {pedCalled ? 'Clear ped call' : 'Ped call'}
             </button>
             {forcedPhase != null && (
               <span className="text-[11px] text-[var(--color-ink-3)]">
