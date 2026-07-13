@@ -20,6 +20,46 @@ const SIGNAL_HEX: Record<string, string> = {
   dark: '#3a4a5f',
 }
 
+type BaseLayer = 'street' | 'satellite'
+
+const BASE_LAYERS: Record<BaseLayer, { url: string; attribution: string }> = {
+  street: {
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution:
+      'Tiles &copy; Esri - Esri, Maxar, Earthstar Geographics, and the GIS community',
+  },
+}
+
+function BaseLayerControl(props: {
+  layer: BaseLayer
+  onChange: (layer: BaseLayer) => void
+}) {
+  return (
+    <div className="leaflet-top leaflet-right">
+      <div className="leaflet-control leaflet-bar m-2 flex overflow-hidden rounded-lg border border-[var(--color-line-strong)] bg-[var(--color-panel)] text-xs font-semibold">
+        {(['street', 'satellite'] as BaseLayer[]).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => props.onChange(l)}
+            className={
+              props.layer === l
+                ? 'px-3 py-1.5 bg-[var(--color-accent)]/15 text-[var(--color-accent)]'
+                : 'px-3 py-1.5 text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+            }
+          >
+            {l === 'street' ? 'Street' : 'Satellite'}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /* A control-room map marker: a status ring around a compact readout of what the
    intersection is serving. Identity never rests on color alone - offline
    markers carry a slash, and the panel names the state in words. */
@@ -375,6 +415,7 @@ export function SignalMap(props: {
   const points = located.map((i) => [i.lat!, i.lon!] as [number, number])
   const center: [number, number] = points[0] ?? [40.75, -73.99]
   const [markerMenu, setMarkerMenu] = useState<MarkerMenuState | null>(null)
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>('street')
 
   return (
     <MapContainer
@@ -384,9 +425,10 @@ export function SignalMap(props: {
       style={{ height: '100%', width: '100%' }}
     >
       <TileLayer
-        attribution='&copy; OpenStreetMap'
-        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={BASE_LAYERS[baseLayer].attribution}
+        url={BASE_LAYERS[baseLayer].url}
       />
+      <BaseLayerControl layer={baseLayer} onChange={setBaseLayer} />
       <FitBounds points={points} />
       <MapContextMenu
         onCreateAt={onCreateAt}

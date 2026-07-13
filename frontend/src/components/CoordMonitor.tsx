@@ -38,11 +38,6 @@ export function CoordMonitor({ snapshot }: { snapshot: Snapshot }) {
         />
         {/* Raw NTCIP value, shown as the controller states it. */}
         <Item label="Local free" value={coord.local_free ?? '--'} />
-        <Item
-          label="Reference"
-          value={coord.reference_phase != null ? `Φ${coord.reference_phase}` : '--'}
-          hint="cycle timed on this phase"
-        />
       </div>
     </section>
   )

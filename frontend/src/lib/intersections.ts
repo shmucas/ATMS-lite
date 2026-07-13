@@ -14,6 +14,7 @@ export interface IntersectionDraft {
      a gitignored sidecar; blank means keep the current/default value. */
   read_community?: string
   write_community?: string
+  movements?: Movement[]
 }
 
 export interface ProbeResult {
@@ -51,8 +52,6 @@ export const intersectionsApi = {
   update: (id: string, draft: IntersectionDraft) =>
     request('PUT', `/api/intersections/${id}`, draft),
   remove: (id: string) => request('DELETE', `/api/intersections/${id}`),
-  updateMovements: (id: string, movements: Movement[]) =>
-    request('PUT', `/api/intersections/${id}`, { movements }),
   deviceTypes: (): Promise<{ supported: DeviceType[]; all: DeviceType[] }> =>
     request('GET', '/api/device-types'),
   probe: (body: {

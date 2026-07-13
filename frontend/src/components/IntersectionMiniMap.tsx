@@ -25,7 +25,8 @@ function InvalidateOnMount() {
   return null
 }
 
-const ICON_BOX = 92
+/* Must match movements.ts's ICON_BOX. 20% smaller than the original 92px box. */
+const ICON_BOX = 74
 
 /* Own component (not inlined in a .map()) so useMemo can keep the same
    divIcon instance across re-renders. The snapshot streams at ~5Hz, and

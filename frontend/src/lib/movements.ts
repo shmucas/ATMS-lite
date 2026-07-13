@@ -104,15 +104,16 @@ const LANE_GEOM: Record<LaneKind, { shaft: string; head: string }> = {
 
 function laneSvg(kind: LaneKind, color: string): string {
   const { shaft, head } = LANE_GEOM[kind]
-  return `<svg viewBox="0 0 24 34" width="26" height="37" style="display:block">
+  return `<svg viewBox="0 0 24 34" width="21" height="30" style="display:block">
     <path d="${shaft}" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
     <polygon points="${head}" fill="${color}" />
   </svg>`
 }
 
 /* Must match IntersectionMiniMap's ICON_BOX, which sizes the Leaflet
-   marker (iconSize/iconAnchor) that wraps this html. */
-const ICON_BOX = 92
+   marker (iconSize/iconAnchor) that wraps this html. 20% smaller than the
+   original 92px box. */
+const ICON_BOX = 74
 
 export function movementIconHtml(movement: Movement, color: string, selected?: boolean): string {
   const lanes = movement.lanes.map((k) => laneSvg(k, color)).join('')

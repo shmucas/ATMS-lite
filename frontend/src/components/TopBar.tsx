@@ -128,8 +128,9 @@ export function TopBar({
         </button>
         {weather && (
           <span className="text-xs text-[var(--color-ink-2)]">
-            {WEATHER_TEXT[weather.code] ?? ''} · {Math.round(weather.temp)}
-            {'°'}C
+            {WEATHER_TEXT[weather.code] ?? ''} ·{' '}
+            {Math.round((weather.temp * 9) / 5 + 32)}
+            {'°'}F
           </span>
         )}
         <span className="flex items-center gap-1.5">

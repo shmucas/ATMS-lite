@@ -1,12 +1,16 @@
+import clsx from 'clsx'
 import { useEffect, useState } from 'react'
 import { intersectionsApi, type ProbeResult } from '../lib/intersections'
-import type { DeviceType, IntersectionInfo } from '../types'
+import type { DeviceType, IntersectionInfo, Movement } from '../types'
+import { MovementsPanel } from './MovementsPanel'
 
 const DEVICE_LABEL: Record<DeviceType, string> = {
   maxtime: 'Q-Free MaxTime (NTCIP/SNMP)',
   econolite: 'Econolite',
   siemens: 'Siemens',
 }
+
+type Tab = 'details' | 'movements'
 
 export interface EditorTarget {
   mode: 'create' | 'edit'
@@ -17,6 +21,7 @@ export interface EditorTarget {
   device_type: DeviceType
   lat: number | null
   lon: number | null
+  movements?: Movement[]
 }
 
 export function IntersectionEditor(props: {
@@ -27,6 +32,7 @@ export function IntersectionEditor(props: {
   picking?: boolean
 }) {
   const { target, onClose, onSaved, onPickLocation, picking } = props
+  const [tab, setTab] = useState<Tab>('details')
   const [name, setName] = useState(target.name)
   const [host, setHost] = useState(target.host)
   const [port, setPort] = useState(String(target.port || 161))
@@ -40,6 +46,7 @@ export function IntersectionEditor(props: {
   const [error, setError] = useState<string | null>(null)
   const [probing, setProbing] = useState(false)
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
+  const [movementsDraft, setMovementsDraft] = useState<Movement[]>(target.movements ?? [])
 
   useEffect(() => {
     intersectionsApi
@@ -90,6 +97,7 @@ export function IntersectionEditor(props: {
       device_type: deviceType,
       lat,
       lon,
+      movements: movementsDraft,
       ...(readCommunity.trim() ? { read_community: readCommunity.trim() } : {}),
       ...(writeCommunity.trim() ? { write_community: writeCommunity.trim() } : {}),
     }
@@ -138,7 +146,47 @@ export function IntersectionEditor(props: {
         </button>
       </div>
 
+      <div className="flex gap-1 border-b border-[var(--color-line)] px-3 pt-2">
+        {([
+          { id: 'details', label: 'Details' },
+          { id: 'movements', label: 'Movements' },
+        ] as { id: Tab; label: string }[]).map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={clsx(
+              'rounded-t-md px-3 py-2 text-sm font-medium transition-colors',
+              tab === t.id
+                ? 'border-b-2 border-[var(--color-accent)] text-[var(--color-ink)]'
+                : 'text-[var(--color-ink-3)] hover:text-[var(--color-ink-2)]',
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="scroll-thin flex-1 space-y-4 overflow-y-auto p-4">
+        {tab === 'movements' ? (
+          <MovementsPanel
+            info={{
+              id: target.id ?? '',
+              name: name.trim() || 'New intersection',
+              lat,
+              lon,
+              connection: 'disconnected',
+              static: null,
+            }}
+            draft={movementsDraft}
+            onChangeDraft={setMovementsDraft}
+            onSave={save}
+            onDiscard={() => setMovementsDraft(target.movements ?? [])}
+            dirty={JSON.stringify(movementsDraft) !== JSON.stringify(target.movements ?? [])}
+            saving={busy}
+            error={error}
+          />
+        ) : (
+          <>
         <Field label="Name">
           <input
             className="input"
@@ -303,6 +351,8 @@ export function IntersectionEditor(props: {
             {error}
           </div>
         )}
+          </>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-[var(--color-line)] p-3">
@@ -361,5 +411,6 @@ export function draftFromInfo(info: IntersectionInfo): EditorTarget {
     device_type: info.device_type ?? 'maxtime',
     lat: info.lat,
     lon: info.lon,
+    movements: info.movements ?? [],
   }
 }
