@@ -164,6 +164,17 @@ export function App() {
                   ).length
                 }
               />
+              {/* Transient boot state: without its own row these pins count
+                  in neither bucket and the legend total comes up short. */}
+              {stream.intersections.some((i) => i.connection === 'starting') && (
+                <Legend
+                  color="var(--color-ink-3)"
+                  label="Starting"
+                  count={
+                    stream.intersections.filter((i) => i.connection === 'starting').length
+                  }
+                />
+              )}
               <div className="mt-1 text-[10px] text-[var(--color-ink-3)]">
                 Click a signal for detail
               </div>

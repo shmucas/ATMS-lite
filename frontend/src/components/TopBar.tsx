@@ -63,7 +63,11 @@ export function TopBar({
   const ix = stream.intersections
   const online = ix.filter((i) => i.connection === 'connected').length
   const degraded = ix.filter((i) => i.connection === 'degraded').length
-  const offline = ix.filter((i) => i.connection === 'disconnected').length
+  // Unsupported devices count as offline here, matching the map legend.
+  const offline = ix.filter(
+    (i) => i.connection === 'disconnected' || i.connection === 'unsupported',
+  ).length
+  const starting = ix.filter((i) => i.connection === 'starting').length
   const first = ix.find((i) => i.lat != null)
   const weather = useWeather(first?.lat ?? undefined, first?.lon ?? undefined)
 
@@ -94,6 +98,9 @@ export function TopBar({
           <Stat value={degraded} label="degraded" color="var(--color-degraded)" />
         )}
         <Stat value={offline} label="offline" color="var(--color-offline)" />
+        {starting > 0 && (
+          <Stat value={starting} label="starting" color="var(--color-ink-3)" />
+        )}
       </div>
 
       <div className="flex items-center gap-4">

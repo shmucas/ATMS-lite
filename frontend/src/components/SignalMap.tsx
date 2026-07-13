@@ -1,9 +1,9 @@
 import 'leaflet/dist/leaflet.css'
 import { divIcon } from 'leaflet'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import type { StreamState } from '../lib/stream'
-import type { Connection, Snapshot } from '../types'
+import type { Connection, IntersectionInfo, Snapshot } from '../types'
 
 const STATUS: Record<Connection, string> = {
   connected: 'var(--color-online)',
@@ -276,6 +276,64 @@ function DropPin({
   )
 }
 
+/* Own component so useMemo can keep the same divIcon instance between
+   snapshots. Snapshots stream several times a second per intersection, and
+   react-leaflet calls marker.setIcon() (a full DOM teardown/rebuild of the
+   marker) whenever the icon prop is a new object. Same fix and reasoning as
+   MovementMarker in IntersectionMiniMap: only rebuild the icon when
+   something it actually renders has changed. */
+function SignalMarker({
+  info,
+  snap,
+  selected,
+  pickMode,
+  onSelect,
+  onMenu,
+}: {
+  info: IntersectionInfo
+  snap: Snapshot | undefined
+  selected: boolean
+  pickMode: boolean
+  onSelect: (id: string) => void
+  onMenu: (menu: MarkerMenuState) => void
+}) {
+  /* Everything markerHtml draws from the snapshot: the 8 lamp dots and the
+     green-phase list under the name. */
+  const signals = snap?.phases.map((p) => p.signal).join() ?? ''
+  const icon = useMemo(
+    () =>
+      divIcon({
+        className: '',
+        iconSize: [120, 64],
+        iconAnchor: [60, 32],
+        html: markerHtml(info, snap, selected),
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [info.name, info.connection, selected, signals],
+  )
+
+  return (
+    <Marker
+      position={[info.lat!, info.lon!]}
+      icon={icon}
+      eventHandlers={{
+        click: () => (pickMode ? undefined : onSelect(info.id)),
+        contextmenu: (e) => {
+          if (pickMode) return
+          e.originalEvent.preventDefault()
+          e.originalEvent.stopPropagation()
+          onMenu({
+            x: e.containerPoint.x,
+            y: e.containerPoint.y,
+            id: info.id,
+            name: info.name,
+          })
+        },
+      }}
+    />
+  )
+}
+
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap()
   useEffect(() => {
@@ -345,35 +403,17 @@ export function SignalMap(props: {
       {pickMode && onPick && (
         <DropPin onConfirm={onPick} onCancel={() => onCancelPick?.()} />
       )}
-      {located.map((ix) => {
-        const snap = stream.snapshots[ix.id]
-        return (
-          <Marker
-            key={ix.id}
-            position={[ix.lat!, ix.lon!]}
-            icon={divIcon({
-              className: '',
-              iconSize: [120, 64],
-              iconAnchor: [60, 32],
-              html: markerHtml(ix, snap, selected === ix.id),
-            })}
-            eventHandlers={{
-              click: () => (pickMode ? undefined : onSelect(ix.id)),
-              contextmenu: (e) => {
-                if (pickMode) return
-                e.originalEvent.preventDefault()
-                e.originalEvent.stopPropagation()
-                setMarkerMenu({
-                  x: e.containerPoint.x,
-                  y: e.containerPoint.y,
-                  id: ix.id,
-                  name: ix.name,
-                })
-              },
-            }}
-          />
-        )
-      })}
+      {located.map((ix) => (
+        <SignalMarker
+          key={ix.id}
+          info={ix}
+          snap={stream.snapshots[ix.id]}
+          selected={selected === ix.id}
+          pickMode={!!pickMode}
+          onSelect={onSelect}
+          onMenu={setMarkerMenu}
+        />
+      ))}
     </MapContainer>
   )
 }

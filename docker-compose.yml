@@ -3,18 +3,25 @@
 # serves the dashboard. The physical 2070 stays intersection #1 and is reached
 # by running the backend on the host instead (see docs), since it lives on the
 # bench Ethernet segment, not the Docker network.
+
+# Shared emulator shape: one image, restart on crash so a killed container
+# degrades its tile and then heals on its own.
+x-emulator: &emulator
+  build: ./emulator
+  restart: unless-stopped
+
 services:
   emulator-1:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-1 }
   emulator-2:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-2 }
   emulator-3:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-3 }
   emulator-4:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-4 }
 
   # Slots 5-10 are defined but not started by default, so a plain
@@ -22,34 +29,43 @@ services:
   # with `docker compose --profile extra up -d emulator-5`, then register it
   # as an intersection from the UI (host = the service name, port 161).
   emulator-5:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-5 }
     profiles: ["extra"]
   emulator-6:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-6 }
     profiles: ["extra"]
   emulator-7:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-7 }
     profiles: ["extra"]
   emulator-8:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-8 }
     profiles: ["extra"]
   emulator-9:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-9 }
     profiles: ["extra"]
   emulator-10:
-    build: ./emulator
+    <<: *emulator
     environment: { EMU_SYS_NAME: VirtualASC-10 }
     profiles: ["extra"]
 
   backend:
     build: ./backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
+    # python:slim has no curl; probe /healthz with the stdlib instead.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       - emulator-1
       - emulator-2
@@ -58,7 +74,9 @@ services:
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
     ports:
       - "8080:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
