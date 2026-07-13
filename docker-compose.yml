@@ -53,11 +53,32 @@ services:
     environment: { EMU_SYS_NAME: VirtualASC-10 }
     profiles: ["extra"]
 
+  # Hi-res event store (M10). Also reachable from a host-run backend at
+  # localhost:5455 (set ATMS_DB_DSN in .env, see .env.example).
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atms
+      POSTGRES_PASSWORD: atms
+      POSTGRES_DB: atms
+    ports:
+      - "5455:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atms -d atms"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     restart: unless-stopped
     ports:
       - "8000:8000"
+    environment:
+      ATMS_DB_DSN: postgresql://atms:atms@postgres:5432/atms
     # python:slim has no curl; probe /healthz with the stdlib instead.
     healthcheck:
       test: ["CMD", "python", "-c",
@@ -67,10 +88,16 @@ services:
       retries: 3
       start_period: 10s
     depends_on:
-      - emulator-1
-      - emulator-2
-      - emulator-3
-      - emulator-4
+      emulator-1:
+        condition: service_started
+      emulator-2:
+        condition: service_started
+      emulator-3:
+        condition: service_started
+      emulator-4:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
@@ -80,3 +107,6 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+
+volumes:
+  pgdata:

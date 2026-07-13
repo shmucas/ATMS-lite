@@ -25,6 +25,7 @@ def start_intersection(app, cfg):
     poller = Poller(cfg, app.state.hub, app.state.poll_hz)
     controller = Controller(cfg, poller.client, app.state.hub, app.state.audit)
     poller.controller = controller
+    poller.hires = getattr(app.state, 'hires', None)
     app.state.pollers[cfg['id']] = poller
     app.state.controllers[cfg['id']] = controller
     task = asyncio.create_task(poller.run(), name=f"poller-{cfg['id']}")

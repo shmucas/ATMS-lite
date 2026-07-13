@@ -12,7 +12,7 @@ import datetime
 import logging
 import time
 
-from . import ntcip
+from . import hires, ntcip
 from .snmp import SnmpClient, SnmpError
 
 log = logging.getLogger('atms.poller')
@@ -49,6 +49,9 @@ class Poller:
         self.groups = 1
         self.max_phases = 8
         self.controller = None  # set by main after construction
+        self.hires = None       # optional HiresStore, set by the registry
+        self._prev_phases = None
+        self._prev_pattern = None
         self.last_uptime = None
         self.last_latency_ms = None
         self.cycle_length = None
@@ -196,6 +199,18 @@ class Poller:
             detectors = ntcip.decode_detectors(values, self.det_count)
             self.detectors = detectors
 
+        # Hi-res capture: every transition between this poll and the last
+        # becomes an Indiana-enumeration event stamped with the poll time.
+        pattern = coord_int(ntcip.COORD_PATTERN)
+        if self.hires is not None:
+            events = hires.derive_events(
+                self._prev_phases, phases, self._prev_pattern, pattern)
+            self.hires.add(
+                self.cfg['id'],
+                datetime.datetime.now(datetime.timezone.utc), events)
+        self._prev_phases = phases
+        self._prev_pattern = pattern
+
         self.seq += 1
         return {
             'schema': 'atms.snapshot.v1',
@@ -253,6 +268,10 @@ class Poller:
         self.failures = 0
 
     def _on_failure(self, exc):
+        # A missed poll breaks transition continuity: deriving across the
+        # gap would stamp old transitions with a new timestamp.
+        self._prev_phases = None
+        self._prev_pattern = None
         self.failures += 1
         if self.failures >= DISCONNECTED_AFTER:
             if self.state != DISCONNECTED:

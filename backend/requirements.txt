@@ -2,3 +2,6 @@ fastapi>=0.115
 # [standard] pulls in websockets; without it uvicorn 404s every WS upgrade.
 uvicorn[standard]>=0.30
 pysnmp>=7.1,<8
+# Hi-res event store (M10); the backend runs fine without a database, the
+# driver just needs to be importable.
+psycopg[binary]>=3.2

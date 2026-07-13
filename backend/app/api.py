@@ -246,6 +246,23 @@ def events(iid: str, request: Request):
     return list(request.app.state.hub.events.get(iid, []))
 
 
+@router.get('/api/intersections/{iid}/hires')
+async def hires_events(iid: str, request: Request,
+                       minutes: int = 15, limit: int = 1000):
+    """Recent hi-res (Indiana enumeration) events derived from polling."""
+    if request.app.state.pollers.get(iid) is None:
+        raise HTTPException(404, f'unknown intersection {iid}')
+    store = request.app.state.hires
+    if store is None:
+        raise HTTPException(
+            503, 'hi-res capture is not enabled; set ATMS_DB_DSN')
+    try:
+        return await store.query(iid, minutes=max(1, min(minutes, 1440)),
+                                 limit=max(1, min(limit, 10000)))
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc))
+
+
 @router.get('/api/intersections/{iid}/control')
 def control_status(iid: str, request: Request):
     return _controller(request, iid).status()

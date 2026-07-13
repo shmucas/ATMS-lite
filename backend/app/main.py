@@ -12,8 +12,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import router
-from .config import AUDIT_LOG_PATH, CORS_ORIGINS, POLL_HZ, load_intersections
+from .config import (AUDIT_LOG_PATH, CORS_ORIGINS, DB_DSN, POLL_HZ,
+                     load_intersections)
 from .control import AuditLog
+from .hires import HiresStore
 from .registry import start_intersection
 from .state import Hub
 from .ws import router as ws_router
@@ -32,6 +34,10 @@ async def lifespan(app: FastAPI):
     app.state.tasks = {}
     app.state.audit = AuditLog(AUDIT_LOG_PATH)
     app.state.poll_hz = POLL_HZ
+    app.state.hires = None
+    if DB_DSN:
+        app.state.hires = HiresStore(DB_DSN)
+        await app.state.hires.start()
     for cfg in load_intersections():
         start_intersection(app, cfg)
     yield
@@ -41,6 +47,8 @@ async def lifespan(app: FastAPI):
     for task in app.state.tasks.values():
         task.cancel()
     await asyncio.gather(*app.state.tasks.values(), return_exceptions=True)
+    if app.state.hires is not None:
+        await app.state.hires.stop()
 
 
 app = FastAPI(title='ATMS-lite', lifespan=lifespan)

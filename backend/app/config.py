@@ -41,6 +41,10 @@ CONTROL_TOKEN = ENV.get('ATMS_CONTROL_TOKEN', '').strip()
 # bench without waiting out the full window.
 ARM_TIMEOUT_S = float(ENV.get('ATMS_ARM_TIMEOUT_S', '300'))
 
+# Postgres DSN for the hi-res event store (M10). Unset disables capture,
+# so the backend still runs standalone on a bench with no database.
+DB_DSN = ENV.get('ATMS_DB_DSN', '').strip()
+
 
 INTERSECTIONS_PATH = pathlib.Path(ENV.get('ATMS_INTERSECTIONS',
                                           ROOT / 'backend' / 'intersections.json'))
