@@ -1,11 +1,11 @@
 # ATMS-lite
 
 A locally hosted Advanced Traffic Management System that talks NTCIP 1202 over
-SNMP to a physical Q-Free MaxTime 2070 traffic controller, (with upcoming support for EOS, ASC/3, Siemens, and Swarco MCCain) scales to many
-intersections through either user creation on the mini map or lightweight simulated docker virtual controllers, and drives a live intersection signal status
-dashboard.
+SNMP to a physical Q-Free MaxTime 2070 traffic controller, (with upcoming support for EOS, ASC/3, Siemens, and Swarco MCCain) and scales to many
+intersections through either user creation on the mini map or lightweight simulated docker virtual controllers. ATMS-lite offers the ability to monitor a live controller status and provides 
+a dashboard displaying singal phase status and the ability to hold/force off phases in the ring and barrier diagram. ATMS-lite also offers the ability to create a corridor and generate a real-time time space diagram for the configured corridor.
 
-Built and verified end to end against real hardware. (My test bench controller)
+ATMS-lite was built and verified end to end against real hardware. (My test bench controller: A Intelight Model 2070 LC that connects to my laptop via ethernet)
 
 ![ATMS-lite dashboard: map view with an intersection's live signal status, ring-and-barrier diagram, and satellite mini-map of its lane movements](docs/images/dashboard.png)
 
@@ -15,7 +15,7 @@ Built and verified end to end against real hardware. (My test bench controller)
   states, and vehicle/ped calls at ~5 Hz over SNMP v1, streamed to the browser
   over WebSocket.
 - **Interactive ring-and-barrier diagram.** Built from the controller's own
-  ring and concurrency configuration, not a template. Click a phase to place a
+  ring and concurrency configuration. Click a phase to place a
   call.
 - **Control path with safety interlocks.** Vehicle and ped calls are written to
   the controller only when an intersection is explicitly ON. Calls auto-clear
@@ -43,7 +43,7 @@ Built and verified end to end against real hardware. (My test bench controller)
 
 ## Run it
 
-Point `backend/intersections.json` at your controller, then:
+Point `backend/intersections.json` at your controller, (intersections.json) is where intersection locations are mapped, then set:
 
 ```
 python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
@@ -60,6 +60,7 @@ prerequisites (venv, node_modules), refuses to double-start if its port is
 already taken, and waits for the service to actually respond before
 returning. Use `--fg` on either to run in the foreground instead of
 backgrounded.
+
 
 `tools/start_stack.sh` starts both frontend and backend services and opens the dashboard in your
 browser. Pass `--no-open` to skip opening the browser.
@@ -95,11 +96,10 @@ docs/       network runbook, OID reference, milestone log, docker guide
 
 ## Docs
 
-- [docs/network-setup.md](docs/network-setup.md) - bench bring-up and the
-  hard-won gotchas
-- [docs/ntcip-oids.md](docs/ntcip-oids.md) - the OIDs read and written, decoded
-  against the real unit
-- [docs/milestones.md](docs/milestones.md) - the gated build log, M0-M9
+- [docs/network-setup.md](docs/network-setup.md) - how my test controller bench works 
+- [docs/ntcip-oids.md](docs/ntcip-oids.md) - how the OIDs of the controller are read and written, decoded
+  against the real unit!
+- [docs/milestones.md](docs/milestones.md) - the gated build log, M0-M9, I broke this down in to milestones to help ease the build
 - [docs/docker.md](docs/docker.md) - the containerized stack
 
 
