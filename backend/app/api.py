@@ -10,9 +10,10 @@ from pydantic import BaseModel, Field, StrictInt
 
 from . import ntcip
 from .config import (CONTROL_TOKEN, ENV, SUPPORTED_DEVICE_TYPES,
-                     normalize_intersection, normalize_movements,
-                     read_communities, read_raw_intersections,
-                     write_communities, write_raw_intersections)
+                     normalize_corridor, normalize_intersection,
+                     normalize_movements, read_communities,
+                     read_raw_intersections, write_communities,
+                     write_raw_intersections)
 from .control import ControlError
 from .registry import start_intersection, stop_intersection
 from .snmp import SnmpClient, SnmpError
@@ -42,6 +43,7 @@ class IntersectionCreate(BaseModel):
     lon: float | None = Field(default=None, strict=True)
     poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
     movements: list | None = None
+    corridor: dict | None = None
     # Stored in the gitignored communities sidecar, never in
     # intersections.json (public repo).
     read_community: str | None = None
@@ -58,6 +60,7 @@ class IntersectionUpdate(BaseModel):
     lon: float | None = Field(default=None, strict=True)
     poll_groups: StrictInt | None = Field(default=None, ge=1, le=5)
     movements: list | None = None
+    corridor: dict | None = None
     read_community: str | None = None
     write_community: str | None = None
 
@@ -128,6 +131,7 @@ def _intersection_summary(app, cfg):
         'lat': cfg['lat'],
         'lon': cfg['lon'],
         'movements': cfg.get('movements', []),
+        'corridor': cfg.get('corridor'),
         'connection': poller.state if poller else 'unsupported',
         'static': app.state.hub.static.get(cfg['id']) if poller else None,
     }
@@ -160,6 +164,7 @@ def _summary(poller, hub):
         'lat': cfg['lat'],
         'lon': cfg['lon'],
         'movements': cfg.get('movements', []),
+        'corridor': cfg.get('corridor'),
         'connection': poller.state,
         'poll_latency_ms': poller.last_latency_ms,
         'last_seq': latest['seq'] if latest else None,
@@ -351,6 +356,8 @@ async def create_intersection(request: Request, body: IntersectionCreate,
             item['poll_groups'] = body.poll_groups
         if body.movements is not None:
             item['movements'] = normalize_movements(body.movements)
+        if body.corridor is not None:
+            item['corridor'] = normalize_corridor(body.corridor)
         # Before normalize_intersection, which reads the sidecar back.
         _store_communities(iid, body.read_community, body.write_community)
         cfg = normalize_intersection(item)
@@ -392,6 +399,9 @@ async def update_intersection(iid: str, request: Request,
         if 'movements' in data:
             # normalize_movements(None) is [], so movements: null clears.
             item['movements'] = normalize_movements(data['movements'])
+        if 'corridor' in data:
+            # normalize_corridor(None) is None, so corridor: null clears.
+            item['corridor'] = normalize_corridor(data['corridor'])
 
         # After old_cfg, before the new normalize: a community change then
         # shows up as a connection-key diff and restarts the poller.
@@ -410,7 +420,7 @@ async def update_intersection(iid: str, request: Request,
         else:
             # Cosmetic edit: mutate the running poller/controller's shared
             # cfg dict in place so live polling and control state survive.
-            for key in ('name', 'lat', 'lon', 'movements'):
+            for key in ('name', 'lat', 'lon', 'movements', 'corridor'):
                 live_cfg[key] = cfg[key]
 
         summary = _intersection_summary(request.app, live_cfg)

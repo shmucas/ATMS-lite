@@ -7,6 +7,11 @@
     "lat": 33.8454156104391,
     "lon": -84.35846149921419,
     "device_type": "maxtime",
+    "corridor": {
+      "name": "bench-corridor",
+      "position_m": 0,
+      "phase": 2
+    },
     "movements": [
       {
         "id": "nb-left",
@@ -110,5 +115,35 @@
     "device_type": "maxtime",
     "lat": 33.85045895313795,
     "lon": -84.36201810836792
+  },
+  {
+    "id": "bench-corridor-a",
+    "name": "Corridor Test A (local emulator)",
+    "host": "127.0.0.1",
+    "port": 1162,
+    "device_type": "maxtime",
+    "lat": 33.84668092934056,
+    "lon": -84.35942173004152,
+    "corridor": {
+      "name": "bench-corridor",
+      "position_m": 350,
+      "phase": 2
+    },
+    "movements": []
+  },
+  {
+    "id": "bench-corridor-b",
+    "name": "Corridor Test B (local emulator)",
+    "host": "127.0.0.1",
+    "port": 1163,
+    "device_type": "maxtime",
+    "lat": 33.84873034977603,
+    "lon": -84.36077356338502,
+    "corridor": {
+      "name": "bench-corridor",
+      "position_m": 700,
+      "phase": 2
+    },
+    "movements": []
   }
 ]

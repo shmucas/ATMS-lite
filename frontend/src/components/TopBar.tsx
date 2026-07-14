@@ -58,11 +58,15 @@ export function TopBar({
   onAddIntersection,
   onToggleActivity,
   activityOpen,
+  onToggleCorridor,
+  corridorOpen,
 }: {
   stream: StreamState
   onAddIntersection: () => void
   onToggleActivity: () => void
   activityOpen: boolean
+  onToggleCorridor: () => void
+  corridorOpen: boolean
 }) {
   const ix = stream.intersections
   const online = ix.filter((i) => i.connection === 'connected').length
@@ -118,6 +122,17 @@ export function TopBar({
           }
         >
           Activity
+        </button>
+        <button
+          type="button"
+          onClick={onToggleCorridor}
+          className={
+            corridorOpen
+              ? 'rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)]'
+              : 'rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+          }
+        >
+          Time-space
         </button>
         <button
           type="button"

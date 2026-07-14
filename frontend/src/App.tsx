@@ -7,6 +7,7 @@ import {
   type EditorTarget,
 } from "./components/IntersectionEditor";
 import { SignalMap } from "./components/SignalMap";
+import { TimeSpaceDiagram } from "./components/TimeSpaceDiagram";
 import { TopBar } from "./components/TopBar";
 import { intersectionsApi } from "./lib/intersections";
 import { useAtmsStream } from "./lib/stream";
@@ -17,6 +18,7 @@ export function App() {
   const [editor, setEditor] = useState<EditorTarget | null>(null);
   const [picking, setPicking] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [corridorOpen, setCorridorOpen] = useState(false);
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -47,6 +49,8 @@ export function App() {
         stream={stream}
         activityOpen={activityOpen}
         onToggleActivity={() => setActivityOpen((v) => !v)}
+        corridorOpen={corridorOpen}
+        onToggleCorridor={() => setCorridorOpen((v) => !v)}
         onAddIntersection={() => {
           setPicking(false);
           setEditor({
@@ -216,6 +220,12 @@ export function App() {
               />
             </div>
           )
+        )}
+
+        {corridorOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-[700] h-[420px] shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
+            <TimeSpaceDiagram stream={stream} onClose={() => setCorridorOpen(false)} />
+          </div>
         )}
       </div>
     </div>

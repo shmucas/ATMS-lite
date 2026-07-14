@@ -121,6 +121,25 @@ def normalize_movements(raw):
     return out
 
 
+def normalize_corridor(raw):
+    """Sanitize the optional corridor-membership tag used by the time-space
+    diagram. Silently drops a malformed corridor rather than rejecting the
+    whole intersection, matching normalize_movements()."""
+    if not isinstance(raw, dict):
+        return None
+    name = raw.get('name')
+    if not isinstance(name, str) or not name.strip():
+        return None
+    try:
+        position_m = float(raw['position_m'])
+        phase = int(raw['phase'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if phase < 1:
+        return None
+    return {'name': name.strip(), 'position_m': position_m, 'phase': phase}
+
+
 def normalize_intersection(item):
     # Community precedence: explicit item value (legacy, discouraged in the
     # committed file), then the gitignored per-intersection sidecar, then
@@ -149,6 +168,9 @@ def normalize_intersection(item):
         # Lane-use arrows (left/through/right per approach) mapped to the
         # signal phase that serves them, for the map overlay.
         'movements': normalize_movements(item.get('movements', [])),
+        # Optional corridor membership (name/position/progression phase) for
+        # the time-space diagram. None if this intersection isn't on one.
+        'corridor': normalize_corridor(item.get('corridor')),
     }
 
 

@@ -23,6 +23,7 @@ backend/communities.local.json
 # Controller database exports stay local (public repo)
 docs/backups/*
 !docs/backups/.gitkeep
+*.pdf
 
 # Raw SNMP walk dumps: multi-MB and mostly vendor objects. Regenerate with
 # tools/discover.py. The committed docs/oid-inventory.md summary and

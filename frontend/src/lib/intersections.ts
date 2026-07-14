@@ -2,6 +2,12 @@ import type { DeviceType, Movement } from "../types";
 
 const TOKEN = import.meta.env.VITE_CONTROL_TOKEN ?? "";
 
+export interface HiresEvent {
+  ts: string;
+  event_code: number;
+  event_param: number;
+}
+
 export interface IntersectionDraft {
   id?: string;
   name: string;
@@ -60,4 +66,14 @@ export const intersectionsApi = {
     port?: number;
     read_community?: string;
   }): Promise<ProbeResult> => request("POST", "/api/probe", body),
+  hires: (id: string, opts: { minutes?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.minutes != null) params.set("minutes", String(opts.minutes));
+    if (opts.limit != null) params.set("limit", String(opts.limit));
+    const qs = params.toString();
+    return request(
+      "GET",
+      `/api/intersections/${id}/hires${qs ? `?${qs}` : ""}`,
+    ) as Promise<HiresEvent[]>;
+  },
 };

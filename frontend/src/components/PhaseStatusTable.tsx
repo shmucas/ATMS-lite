@@ -1,11 +1,5 @@
+import { SIGNAL_FILL as FILL } from '../lib/phaseColors'
 import type { Phase, Snapshot } from '../types'
-
-const FILL: Record<Phase['signal'], string> = {
-  green: '#10d982',
-  yellow: '#f5c518',
-  red: '#ff5a5a',
-  dark: '#2b3a4f',
-}
 
 function Dot({ color }: { color: string }) {
   return (

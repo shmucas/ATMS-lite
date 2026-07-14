@@ -87,6 +87,10 @@ export interface IntersectionInfo {
   host?: string
   port?: number
   movements?: Movement[]
+  /* Corridor membership for the time-space diagram: which named corridor
+     this intersection sits on, its distance along it, and which phase
+     represents the corridor's progression direction here. */
+  corridor?: { name: string; position_m: number; phase: number } | null
   static: {
     sys_descr?: string
     controller_max_phases?: number
