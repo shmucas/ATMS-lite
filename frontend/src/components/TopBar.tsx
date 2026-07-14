@@ -60,6 +60,8 @@ export function TopBar({
   activityOpen,
   onToggleCorridor,
   corridorOpen,
+  onToggleReports,
+  reportsOpen,
 }: {
   stream: StreamState
   onAddIntersection: () => void
@@ -67,6 +69,8 @@ export function TopBar({
   activityOpen: boolean
   onToggleCorridor: () => void
   corridorOpen: boolean
+  onToggleReports: () => void
+  reportsOpen: boolean
 }) {
   const ix = stream.intersections
   const online = ix.filter((i) => i.connection === 'connected').length
@@ -133,6 +137,17 @@ export function TopBar({
           }
         >
           Time-space
+        </button>
+        <button
+          type="button"
+          onClick={onToggleReports}
+          className={
+            reportsOpen
+              ? 'rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)]'
+              : 'rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+          }
+        >
+          ATSPM Reports
         </button>
         <button
           type="button"

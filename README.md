@@ -24,6 +24,15 @@ ATMS-lite was built and verified end to end against real hardware. (My test benc
   phase status. 
 - **Detector and MOE stats.** Detector volume/occupancy plus per-phase green
   utilization computed from the signal stream.
+- **Time-space diagram.** For a configured corridor, a live progression chart of
+  each intersection's phase intervals over distance and time, with an adjustable
+  design-speed and cycle-length band overlay to eyeball offsets and green-band
+  quality against real operation.
+- **ATSPM reports.** Hi-res controller events (Indiana enumeration) are derived
+  from the poll stream and stored in Postgres. The Split Monitor report renders
+  per-phase green and yellow splits and cycle length over time, computed from
+  those events and drawn natively in the dashboard. Enabled by setting
+  `ATMS_DB_DSN`; capture is off otherwise.
 - **Map and weather.** OpenStreetMap via Leaflet, pins colored by connection
   state, live weather from Open-Meteo (no API key).
 - **Multi-intersection.** A gateway backend polls many controllers at once; each

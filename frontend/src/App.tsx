@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityDrawer } from "./components/ActivityDrawer";
+import { AtspmReports } from "./components/AtspmReports";
 import { DetailDrawer } from "./components/DetailDrawer";
 import {
   draftFromInfo,
@@ -19,6 +20,7 @@ export function App() {
   const [picking, setPicking] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [corridorOpen, setCorridorOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -50,7 +52,15 @@ export function App() {
         activityOpen={activityOpen}
         onToggleActivity={() => setActivityOpen((v) => !v)}
         corridorOpen={corridorOpen}
-        onToggleCorridor={() => setCorridorOpen((v) => !v)}
+        onToggleCorridor={() => {
+          setCorridorOpen((v) => !v);
+          setReportsOpen(false);
+        }}
+        reportsOpen={reportsOpen}
+        onToggleReports={() => {
+          setReportsOpen((v) => !v);
+          setCorridorOpen(false);
+        }}
         onAddIntersection={() => {
           setPicking(false);
           setEditor({
@@ -225,6 +235,12 @@ export function App() {
         {corridorOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[700] h-[420px] shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
             <TimeSpaceDiagram stream={stream} onClose={() => setCorridorOpen(false)} />
+          </div>
+        )}
+
+        {reportsOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-[700] h-[480px] shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
+            <AtspmReports stream={stream} onClose={() => setReportsOpen(false)} />
           </div>
         )}
       </div>
