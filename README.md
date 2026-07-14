@@ -3,7 +3,7 @@
 A locally hosted Advanced Traffic Management System that talks NTCIP 1202 over
 SNMP to a physical Q-Free MaxTime 2070 traffic controller, (with upcoming support for EOS, ASC/3, Siemens, and Swarco MCCain) and scales to many
 intersections through either user creation on the mini map or lightweight simulated docker virtual controllers. ATMS-lite offers the ability to monitor a live controller status and provides 
-a dashboard displaying singal phase status and the ability to hold/force off phases in the ring and barrier diagram. ATMS-lite also offers the ability to create a corridor and generate a real-time time space diagram for the configured corridor.
+a dashboard displaying signal phase status and the ability to hold/force off phases in the ring and barrier diagram. ATMS-lite also offers the ability to create a corridor and generate a real-time time space diagram for the configured corridor. ATMS-lite also includes basic ATSPM reports (split monitoring for now with more ATSPM reports on the roadmap).
 
 ATMS-lite was built and verified end to end against real hardware. (My test bench controller: A Intelight Model 2070 LC that connects to my laptop via ethernet)
 
@@ -27,7 +27,10 @@ ATMS-lite was built and verified end to end against real hardware. (My test benc
 - **Time-space diagram.** For a configured corridor, a live progression chart of
   each intersection's phase intervals over distance and time, with an adjustable
   design-speed and cycle-length band overlay to eyeball offsets and green-band
-  quality against real operation.
+  quality against real operation. A corridor can declare its travel direction
+  (e.g. northbound), and each intersection's through phase for that direction
+  is picked up automatically from its own lane movements. One click flips the
+  chart to the opposite direction.
 - **ATSPM reports.** Hi-res controller events (Indiana enumeration) are derived
   from the poll stream and stored in Postgres. The Split Monitor report renders
   per-phase green and yellow splits and cycle length over time, computed from

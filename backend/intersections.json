@@ -10,7 +10,8 @@
     "corridor": {
       "name": "bench-corridor",
       "position_m": 0,
-      "phase": 2
+      "phase": 2,
+      "direction": "NB"
     },
     "movements": [
       {
@@ -127,7 +128,8 @@
     "corridor": {
       "name": "bench-corridor",
       "position_m": 350,
-      "phase": 2
+      "phase": 2,
+      "direction": "NB"
     },
     "movements": []
   },
@@ -142,7 +144,8 @@
     "corridor": {
       "name": "bench-corridor",
       "position_m": 700,
-      "phase": 2
+      "phase": 2,
+      "direction": "NB"
     },
     "movements": []
   }

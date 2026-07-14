@@ -137,7 +137,18 @@ def normalize_corridor(raw):
         return None
     if phase < 1:
         return None
-    return {'name': name.strip(), 'position_m': position_m, 'phase': phase}
+    out = {'name': name.strip(), 'position_m': position_m, 'phase': phase}
+    # Optional: the compass approach that travels in the direction of
+    # increasing position_m along this corridor. When set, the frontend
+    # derives each member's progression phase from its own movements
+    # (the through phase on that approach) instead of the single manual
+    # `phase` above, and can flip to the opposite approach to chart the
+    # reverse direction. `phase` stays as the fallback for members with no
+    # movements mapped (e.g. bare emulators).
+    direction = raw.get('direction')
+    if direction in APPROACHES:
+        out['direction'] = direction
+    return out
 
 
 def normalize_intersection(item):

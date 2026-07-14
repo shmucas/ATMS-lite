@@ -1,5 +1,5 @@
 import type { HiresEvent } from './intersections'
-import type { Phase } from '../types'
+import type { Approach, Movement, Phase } from '../types'
 
 const GREEN = 1
 const YELLOW = 8
@@ -43,6 +43,33 @@ export function reconstructIntervals(
   return intervals
 }
 
+const OPPOSITE_APPROACH: Record<Approach, Approach> = {
+  NB: 'SB',
+  SB: 'NB',
+  EB: 'WB',
+  WB: 'EB',
+}
+
+export function oppositeApproach(approach: Approach): Approach {
+  return OPPOSITE_APPROACH[approach]
+}
+
+/* Which phase to plot for a corridor member traveling `approach`: the
+   through phase of that member's own movement on that approach, so a
+   corridor "links phases together" by direction instead of one manually
+   picked phase per intersection. Falls back to `fallbackPhase` (the
+   corridor's manual `phase`) for members with no movements mapped, e.g.
+   bare emulators with an empty movements list. */
+export function resolveCorridorPhase(
+  movements: Movement[] | undefined,
+  approach: Approach,
+  fallbackPhase: number,
+): number {
+  const onApproach = (movements ?? []).filter((m) => m.approach === approach)
+  const through = onApproach.find((m) => m.lanes.includes('through'))
+  return (through ?? onApproach[0])?.phase ?? fallbackPhase
+}
+
 /* Progression-bandwidth overlay: a family of parallel lines through the
    time-position rectangle at a chosen travel speed, spaced by cycleLength
    seconds so they sweep every offset once per cycle. Pure geometry, no
@@ -55,6 +82,7 @@ export function progressionLines(
   maxPosition: number,
   speedMph: number,
   cycleLengthS: number,
+  reversed = false,
 ): { x1: number; y1: number; x2: number; y2: number }[] {
   if (speedMph <= 0 || cycleLengthS <= 0) return []
   const speedMps = speedMph * 0.44704
@@ -62,12 +90,15 @@ export function progressionLines(
   if (spanM <= 0) return []
   const travelMs = (spanM / speedMps) * 1000
   const cycleMs = cycleLengthS * 1000
+  // Forward direction travels from minPosition to maxPosition (increasing
+  // position over time); the opposite direction is the mirrored slope.
+  const [startPos, endPos] = reversed ? [maxPosition, minPosition] : [minPosition, maxPosition]
 
   const lines: { x1: number; y1: number; x2: number; y2: number }[] = []
   // Start times cover the window plus one extra cycle of lead-in so lines
   // crossing the left/top edge are still drawn.
   for (let t0 = windowStart - travelMs; t0 < windowEnd; t0 += cycleMs) {
-    lines.push({ x1: t0, y1: minPosition, x2: t0 + travelMs, y2: maxPosition })
+    lines.push({ x1: t0, y1: startPos, x2: t0 + travelMs, y2: endPos })
   }
   return lines
 }

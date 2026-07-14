@@ -89,8 +89,17 @@ export interface IntersectionInfo {
   movements?: Movement[]
   /* Corridor membership for the time-space diagram: which named corridor
      this intersection sits on, its distance along it, and which phase
-     represents the corridor's progression direction here. */
-  corridor?: { name: string; position_m: number; phase: number } | null
+     represents the corridor's progression direction here. `direction`,
+     when set, is the compass approach that travels toward increasing
+     position_m; the diagram derives each member's phase from its own
+     movements for that approach (falling back to `phase` when a member
+     has none mapped) and can flip to the opposite approach. */
+  corridor?: {
+    name: string
+    position_m: number
+    phase: number
+    direction?: Approach
+  } | null
   static: {
     sys_descr?: string
     controller_max_phases?: number

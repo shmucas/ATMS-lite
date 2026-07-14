@@ -68,6 +68,22 @@ def test_create_update_delete_lifecycle(client):
     assert client.delete(f'/api/intersections/{iid}').status_code == 404
 
 
+def test_corridor_direction_round_trips(client):
+    created = client.post('/api/intersections', json=UNSUPPORTED).json()
+    iid = created['id']
+
+    corridor = {'name': 'main-st', 'position_m': 350, 'phase': 2, 'direction': 'NB'}
+    res = client.put(f'/api/intersections/{iid}', json={'corridor': corridor})
+    assert res.status_code == 200
+    assert res.json()['corridor'] == corridor
+
+    # An invalid direction is dropped, not fatal to the rest of the corridor.
+    res = client.put(f'/api/intersections/{iid}',
+                     json={'corridor': {**corridor, 'direction': 'XX'}})
+    assert res.status_code == 200
+    assert 'direction' not in res.json()['corridor']
+
+
 def test_duplicate_names_get_unique_ids(client):
     first = client.post('/api/intersections', json=UNSUPPORTED).json()
     second = client.post('/api/intersections', json=UNSUPPORTED).json()

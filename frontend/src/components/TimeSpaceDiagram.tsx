@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { intersectionsApi, type HiresEvent } from '../lib/intersections'
 import { SIGNAL_FILL } from '../lib/phaseColors'
-import { progressionLines, reconstructIntervals } from '../lib/timespace'
+import { oppositeApproach, progressionLines, reconstructIntervals, resolveCorridorPhase } from '../lib/timespace'
 import type { StreamState } from '../lib/stream'
-import type { IntersectionInfo } from '../types'
+import type { Approach, IntersectionInfo } from '../types'
 
 const REFRESH_MS = 5000
 const MARGIN = { top: 24, right: 24, bottom: 32, left: 270 }
@@ -14,33 +14,49 @@ const CHART_WIDTH = 760
 interface CorridorMember {
   info: IntersectionInfo
   positionM: number
-  phase: number
+  /* Manual fallback phase (corridor.phase) for members with no movements
+     mapped for the chosen direction. */
+  fallbackPhase: number
+}
+
+interface Corridor {
+  members: CorridorMember[]
+  /* The compass approach that travels toward increasing position_m, if the
+     corridor declares one. Lets the diagram derive each member's phase by
+     direction and offer the opposite direction, instead of one fixed
+     manually-picked phase per intersection. */
+  direction: Approach | null
 }
 
 function groupCorridors(intersections: IntersectionInfo[]) {
-  const groups = new Map<string, CorridorMember[]>()
+  const groups = new Map<string, Corridor>()
   for (const info of intersections) {
     const c = info.corridor
     if (!c) continue
-    const list = groups.get(c.name) ?? []
-    list.push({ info, positionM: c.position_m, phase: c.phase })
-    groups.set(c.name, list)
+    const corridor = groups.get(c.name) ?? { members: [], direction: null }
+    corridor.members.push({ info, positionM: c.position_m, fallbackPhase: c.phase })
+    if (c.direction) corridor.direction = c.direction
+    groups.set(c.name, corridor)
   }
-  for (const list of groups.values()) list.sort((a, b) => a.positionM - b.positionM)
+  for (const corridor of groups.values()) corridor.members.sort((a, b) => a.positionM - b.positionM)
   return groups
 }
 
 function CorridorChart(props: {
   name: string
   members: CorridorMember[]
+  direction: Approach | null
   minutes: number
   speedMph: number
   cycleLengthS: number
 }) {
-  const { name, members, minutes, speedMph, cycleLengthS } = props
+  const { name, members, direction, minutes, speedMph, cycleLengthS } = props
   const [events, setEvents] = useState<Record<string, HiresEvent[]>>({})
   const [now, setNow] = useState(() => Date.now())
   const [error, setError] = useState<string | null>(null)
+  const [reversed, setReversed] = useState(false)
+
+  const travelDirection = direction ? (reversed ? oppositeApproach(direction) : direction) : null
 
   useEffect(() => {
     let stopped = false
@@ -82,16 +98,27 @@ function CorridorChart(props: {
     MARGIN.top +
     (maxPos > minPos ? ((pos - minPos) / (maxPos - minPos)) * plotHeight : plotHeight / 2)
 
-  const lines = progressionLines(windowStart, windowEnd, minPos, maxPos, speedMph, cycleLengthS)
+  const lines = progressionLines(windowStart, windowEnd, minPos, maxPos, speedMph, cycleLengthS, reversed)
 
   const tickCount = Math.min(minutes, 10)
   const ticks = Array.from({ length: tickCount + 1 }, (_, i) => windowStart + (i * (windowEnd - windowStart)) / tickCount)
 
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
-        Corridor: {name}
-      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+          Corridor: {name}
+          {travelDirection && <span className="ml-2 normal-case text-[var(--color-ink-2)]">({travelDirection})</span>}
+        </h3>
+        {direction && (
+          <button
+            onClick={() => setReversed((r) => !r)}
+            className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-[11px] text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
+          >
+            Flip to {oppositeApproach(travelDirection ?? direction)}
+          </button>
+        )}
+      </div>
       {error && (
         <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]">
           {error}
@@ -142,7 +169,10 @@ function CorridorChart(props: {
 
           {members.map((m) => {
             const y = yScale(m.positionM)
-            const intervals = reconstructIntervals(events[m.info.id] ?? [], m.phase, windowStart, windowEnd)
+            const phase = travelDirection
+              ? resolveCorridorPhase(m.info.movements, travelDirection, m.fallbackPhase)
+              : m.fallbackPhase
+            const intervals = reconstructIntervals(events[m.info.id] ?? [], phase, windowStart, windowEnd)
             return (
               <g key={m.info.id}>
                 <text
@@ -162,7 +192,7 @@ function CorridorChart(props: {
                   fontSize={9}
                   fill="var(--color-ink-3)"
                 >
-                  {m.positionM.toFixed(0)} m · phase {m.phase}
+                  {m.positionM.toFixed(0)} m · phase {phase}
                 </text>
                 <line
                   x1={MARGIN.left}
@@ -256,11 +286,12 @@ export function TimeSpaceDiagram(props: { stream: StreamState; onClose: () => vo
             No intersections are assigned to a corridor yet.
           </div>
         ) : (
-          Array.from(corridors.entries()).map(([name, members]) => (
+          Array.from(corridors.entries()).map(([name, corridor]) => (
             <CorridorChart
               key={name}
               name={name}
-              members={members}
+              members={corridor.members}
+              direction={corridor.direction}
               minutes={minutes}
               speedMph={speedMph}
               cycleLengthS={cycleLengthS}
