@@ -25,6 +25,10 @@ docs/backups/*
 !docs/backups/.gitkeep
 *.pdf
 
+# Vendor reference dumps dropped into the knowledgebase (JSON exports, etc.).
+# The tracked plan docs (*.md) and out.txt stay in the repo.
+docs/knowledgebase/*.json
+
 # Raw SNMP walk dumps: multi-MB and mostly vendor objects. Regenerate with
 # tools/discover.py. The committed docs/oid-inventory.md summary and
 # docs/ntcip-oids.md reference carry what we actually use.
