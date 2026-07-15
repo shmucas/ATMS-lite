@@ -9,6 +9,13 @@ def phase(num, signal='red', ped='dont_walk', veh_call=False, ped_call=False):
             'on': False, 'next': False}
 
 
+def detector(num, occupancy=None, reporting=None):
+    if reporting is None:
+        reporting = occupancy is not None
+    return {'detector': num, 'volume': None, 'occupancy': occupancy,
+            'reporting': reporting}
+
+
 def test_first_poll_emits_nothing():
     assert hires.derive_events(None, [phase(1, 'green')]) == []
 
@@ -66,6 +73,27 @@ def test_new_phase_in_current_snapshot_is_ignored():
     prev = [phase(1)]
     cur = [phase(1), phase(2, 'green')]
     assert hires.derive_events(prev, cur) == []
+
+
+def test_detector_first_poll_emits_nothing():
+    assert hires.derive_detector_events(None, [detector(1, 50)]) == []
+
+
+def test_detector_not_reporting_to_occupied_emits_on():
+    prev = [detector(1, None)]
+    cur = [detector(1, 60)]
+    assert hires.derive_detector_events(prev, cur) == [(hires.DETECTOR_ON, 1)]
+
+
+def test_detector_occupied_to_clear_emits_off():
+    prev = [detector(1, 60)]
+    cur = [detector(1, 0)]
+    assert hires.derive_detector_events(prev, cur) == [(hires.DETECTOR_OFF, 1)]
+
+
+def test_detector_no_change_no_events():
+    snap = [detector(1, 60), detector(2, None)]
+    assert hires.derive_detector_events(snap, snap) == []
 
 
 def test_store_buffer_sheds_oldest():

@@ -14,6 +14,8 @@ Hi-Resolution Data Logger enumeration, the vocabulary ATSPM consumes:
   43  phase call registered        (param = phase)
   44  phase call dropped           (param = phase)
   45  ped call registered          (param = phase)
+  81  detector on (occupied)       (param = detector channel)
+  82  detector off (unoccupied)    (param = detector channel)
   131 coord pattern change         (param = new pattern)
 
 True hi-res loggers timestamp at 10 Hz inside the controller; events here
@@ -37,6 +39,8 @@ PED_BEGIN_DONT_WALK = 23
 PHASE_CALL_REGISTERED = 43
 PHASE_CALL_DROPPED = 44
 PED_CALL_REGISTERED = 45
+DETECTOR_ON = 81
+DETECTOR_OFF = 82
 COORD_PATTERN_CHANGE = 131
 
 _SIGNAL_ONSET = {
@@ -80,6 +84,31 @@ def derive_events(prev_phases, cur_phases, prev_pattern=None, cur_pattern=None):
     if (cur_pattern is not None and prev_pattern is not None
             and cur_pattern != prev_pattern):
         events.append((COORD_PATTERN_CHANGE, cur_pattern))
+    return events
+
+
+def derive_detector_events(prev_detectors, cur_detectors):
+    """Diff two snapshots' detector lists into (event_code, event_param) pairs.
+
+    prev_detectors may be None (first poll): no events, since onsets cannot be
+    distinguished from pre-existing state. A detector with occupancy None
+    (not reporting) is treated the same as occupancy 0 (clear).
+    """
+    events = []
+    if prev_detectors is None:
+        return events
+    prev_by_det = {d['detector']: d for d in prev_detectors}
+    for cur in cur_detectors:
+        prev = prev_by_det.get(cur['detector'])
+        if prev is None:
+            continue
+        num = cur['detector']
+        prev_on = bool(prev['occupancy'])
+        cur_on = bool(cur['occupancy'])
+        if cur_on and not prev_on:
+            events.append((DETECTOR_ON, num))
+        elif prev_on and not cur_on:
+            events.append((DETECTOR_OFF, num))
     return events
 
 
