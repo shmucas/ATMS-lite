@@ -52,6 +52,7 @@ class Poller:
         self.hires = None       # optional HiresStore, set by the registry
         self._prev_phases = None
         self._prev_pattern = None
+        self._prev_detectors = None
         self.last_uptime = None
         self.last_latency_ms = None
         self.cycle_length = None
@@ -195,16 +196,23 @@ class Poller:
                 self.unit_status[oid] = val
 
         detectors = self.detectors
+        detector_events = []
         if slow:
             detectors = ntcip.decode_detectors(values, self.det_count)
+            detector_events = hires.derive_detector_events(
+                self._prev_detectors, detectors)
+            self._prev_detectors = detectors
             self.detectors = detectors
 
         # Hi-res capture: every transition between this poll and the last
         # becomes an Indiana-enumeration event stamped with the poll time.
+        # Detector on/off events only appear on slow polls, since that is
+        # the only cadence at which detector state is actually refreshed.
         pattern = coord_int(ntcip.COORD_PATTERN)
         if self.hires is not None:
             events = hires.derive_events(
                 self._prev_phases, phases, self._prev_pattern, pattern)
+            events += detector_events
             self.hires.add(
                 self.cfg['id'],
                 datetime.datetime.now(datetime.timezone.utc), events)
@@ -272,6 +280,7 @@ class Poller:
         # gap would stamp old transitions with a new timestamp.
         self._prev_phases = None
         self._prev_pattern = None
+        self._prev_detectors = None
         self.failures += 1
         if self.failures >= DISCONNECTED_AFTER:
             if self.state != DISCONNECTED:
