@@ -307,15 +307,13 @@ export function IntersectionEditor(props: {
                     );
                   },
                 )}
-                {target.mode === "create" && (
-                  <optgroup label="Docker emulator (autofills host/port)">
-                    {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                      <option key={n} value={`docker:${n}`}>
-                        docker-emulator-{n}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
+                <optgroup label="Docker emulator (autofills host/port)">
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={`docker:${n}`}>
+                      docker-emulator-{n}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </Field>
 
