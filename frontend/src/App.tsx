@@ -21,6 +21,9 @@ export function App() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [corridorOpen, setCorridorOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"online" | "offline" | null>(
+    null,
+  );
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -32,6 +35,12 @@ export function App() {
   const backendDown = !stream.wsConnected;
   const unpinned = stream.intersections.filter(
     (i) => i.lat == null || i.lon == null,
+  );
+  const onlineIntersections = stream.intersections.filter(
+    (i) => i.connection === "connected" || i.connection === "degraded",
+  );
+  const offlineIntersections = stream.intersections.filter(
+    (i) => i.connection === "disconnected" || i.connection === "unsupported",
   );
 
   const deleteIntersection = async (id: string, name: string) => {
@@ -153,27 +162,23 @@ export function App() {
 
           {/* Map legend, bottom-center, so status reads without opening anything. */}
           {stream.intersections.length > 0 && (
-            <div className="pointer-events-none absolute bottom-4 left-1/2 z-[500] flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-2 text-[11px] text-[var(--color-ink-2)] backdrop-blur">
+            <div className="absolute bottom-4 left-1/2 z-[500] flex -translate-x-1/2 flex-col items-stretch gap-1 rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/90 px-3 py-2 text-[11px] text-[var(--color-ink-2)] backdrop-blur">
               <Legend
                 color="var(--color-online)"
                 label="Online"
-                count={
-                  stream.intersections.filter(
-                    (i) =>
-                      i.connection === "connected" ||
-                      i.connection === "degraded",
-                  ).length
+                count={onlineIntersections.length}
+                active={statusFilter === "online"}
+                onClick={() =>
+                  setStatusFilter((f) => (f === "online" ? null : "online"))
                 }
               />
               <Legend
                 color="var(--color-offline)"
                 label="Offline"
-                count={
-                  stream.intersections.filter(
-                    (i) =>
-                      i.connection === "disconnected" ||
-                      i.connection === "unsupported",
-                  ).length
+                count={offlineIntersections.length}
+                active={statusFilter === "offline"}
+                onClick={() =>
+                  setStatusFilter((f) => (f === "offline" ? null : "offline"))
                 }
               />
               {/* Transient boot state: without its own row these pins count
@@ -191,8 +196,55 @@ export function App() {
                   }
                 />
               )}
-              <div className="mt-1 text-[10px] text-[var(--color-ink-3)]">
+              <div className="pointer-events-none mt-1 text-[10px] text-[var(--color-ink-3)]">
                 Click a signal for detail
+              </div>
+            </div>
+          )}
+
+          {statusFilter && (
+            <div className="absolute bottom-20 left-1/2 z-[500] max-h-[240px] w-[240px] -translate-x-1/2 overflow-y-auto rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)]/95 p-3 text-xs text-[var(--color-ink-2)] shadow-xl backdrop-blur">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="font-semibold text-[var(--color-ink)]">
+                  {statusFilter === "online" ? "Online" : "Offline"} (
+                  {statusFilter === "online"
+                    ? onlineIntersections.length
+                    : offlineIntersections.length}
+                  )
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(null)}
+                  className="text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="space-y-1">
+                {(statusFilter === "online"
+                  ? onlineIntersections
+                  : offlineIntersections
+                ).map((i) => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    onClick={() => {
+                      setEditor(null);
+                      setSelected(i.id);
+                      setStatusFilter(null);
+                    }}
+                    className="block w-full truncate rounded-md px-1.5 py-1 text-left hover:bg-[var(--color-panel-2)] hover:text-[var(--color-ink)]"
+                  >
+                    {i.name}
+                  </button>
+                ))}
+                {(statusFilter === "online"
+                  ? onlineIntersections
+                  : offlineIntersections
+                ).length === 0 && (
+                  <div className="text-[var(--color-ink-3)]">None</div>
+                )}
               </div>
             </div>
           )}
@@ -252,17 +304,39 @@ function Legend({
   color,
   label,
   count,
+  active,
+  onClick,
 }: {
   color: string;
   label: string;
   count: number;
+  active?: boolean;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="flex items-center gap-2">
+  const content = (
+    <>
       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
       <span>
         {label} <span className="text-[var(--color-ink-3)]">({count})</span>
       </span>
-    </div>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className="flex items-center gap-2">{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? "flex items-center gap-2 rounded-md bg-[var(--color-panel-2)] px-1 -mx-1 text-[var(--color-ink)]"
+          : "flex items-center gap-2 rounded-md px-1 -mx-1 hover:bg-[var(--color-panel-2)]"
+      }
+    >
+      {content}
+    </button>
   );
 }

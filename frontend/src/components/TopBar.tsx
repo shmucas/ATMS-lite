@@ -136,7 +136,7 @@ export function TopBar({
               : 'rounded-lg border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
           }
         >
-          Time-space
+          Time-space diagram
         </button>
         <button
           type="button"

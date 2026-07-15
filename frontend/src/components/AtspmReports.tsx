@@ -14,6 +14,14 @@ const MARGIN = { top: 16, right: 20, bottom: 30, left: 40 }
 const PLOT_HEIGHT = 240
 const BAR_SLOT = 30 // px of horizontal room per cycle
 const BAR_WIDTH = 16
+const MAX_RANGE_MINUTES = 60
+
+/* `datetime-local` inputs want and return local wall-clock time with no
+   timezone, so Date's own ISO formatter (always UTC) can't round-trip it. */
+function toLocalInputValue(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
 
 function fmt(n: number, digits = 1) {
   return Number.isFinite(n) ? n.toFixed(digits) : '-'
@@ -192,8 +200,8 @@ function SplitChart({ phase, splits }: { phase: number; splits: PhaseSplit[] }) 
   )
 }
 
-function SplitMonitor(props: { id: string; minutes: number }) {
-  const { id, minutes } = props
+function SplitMonitor(props: { id: string; start: string; end: string; minutes: number }) {
+  const { id, start, end, minutes } = props
   const [events, setEvents] = useState<HiresEvent[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<number | null>(null)
@@ -203,7 +211,8 @@ function SplitMonitor(props: { id: string; minutes: number }) {
     const load = async () => {
       try {
         const rows = await intersectionsApi.hires(id, {
-          minutes,
+          start,
+          end,
           limit: Math.min(10000, minutes * 200),
         })
         if (stopped) return
@@ -219,7 +228,7 @@ function SplitMonitor(props: { id: string; minutes: number }) {
       stopped = true
       window.clearInterval(t)
     }
-  }, [id, minutes])
+  }, [id, start, end, minutes])
 
   const phases = useMemo(() => (events ? phasesWithSplits(events) : []), [events])
 
@@ -308,7 +317,34 @@ export function AtspmReports(props: { stream: StreamState; onClose: () => void }
   const { stream, onClose } = props
   const ix = stream.intersections
   const [id, setId] = useState<string | null>(null)
-  const [minutes, setMinutes] = useState(30)
+  const [start, setStart] = useState(() =>
+    toLocalInputValue(new Date(Date.now() - 30 * 60_000)),
+  )
+  const [end, setEnd] = useState(() => toLocalInputValue(new Date()))
+
+  const startDate = new Date(start)
+  const endDate = new Date(end)
+  const rangeInvalid = !(endDate.getTime() > startDate.getTime())
+  const minutes = rangeInvalid
+    ? 0
+    : Math.round((endDate.getTime() - startDate.getTime()) / 60_000)
+  const rangeTooLong = minutes > MAX_RANGE_MINUTES
+
+  const onStartChange = (value: string) => {
+    setStart(value)
+    const s = new Date(value)
+    if (endDate.getTime() - s.getTime() > MAX_RANGE_MINUTES * 60_000) {
+      setEnd(toLocalInputValue(new Date(s.getTime() + MAX_RANGE_MINUTES * 60_000)))
+    }
+  }
+
+  const onEndChange = (value: string) => {
+    setEnd(value)
+    const e = new Date(value)
+    if (e.getTime() - startDate.getTime() > MAX_RANGE_MINUTES * 60_000) {
+      setStart(toLocalInputValue(new Date(e.getTime() - MAX_RANGE_MINUTES * 60_000)))
+    }
+  }
 
   // Default to the first reachable intersection; keep the selection valid.
   useEffect(() => {
@@ -356,19 +392,28 @@ export function AtspmReports(props: { stream: StreamState; onClose: () => void }
           </select>
         </label>
         <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
-          Window
+          From
           <input
-            type="number"
-            min={1}
-            max={1440}
-            value={minutes}
-            onChange={(e) =>
-              setMinutes(Math.max(1, Math.min(1440, parseInt(e.target.value, 10) || 1)))
-            }
-            className="w-16 rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
+            type="datetime-local"
+            value={start}
+            max={end}
+            onChange={(e) => onStartChange(e.target.value)}
+            className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
           />
-          min
         </label>
+        <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+          To
+          <input
+            type="datetime-local"
+            value={end}
+            min={start}
+            onChange={(e) => onEndChange(e.target.value)}
+            className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
+          />
+        </label>
+        <span className="text-[10px] text-[var(--color-ink-3)]">
+          Up to {MAX_RANGE_MINUTES} min per report
+        </span>
       </div>
 
       <div className="scroll-thin flex-1 overflow-y-auto p-4">
@@ -376,8 +421,21 @@ export function AtspmReports(props: { stream: StreamState; onClose: () => void }
           <div className="py-12 text-center text-sm text-[var(--color-ink-3)]">
             No intersections available.
           </div>
+        ) : rangeInvalid ? (
+          <div className="py-12 text-center text-sm text-[var(--color-ink-3)]">
+            Pick an end time after the start time.
+          </div>
+        ) : rangeTooLong ? (
+          <div className="py-12 text-center text-sm text-[var(--color-ink-3)]">
+            Range can't exceed {MAX_RANGE_MINUTES} minutes.
+          </div>
         ) : (
-          <SplitMonitor id={id} minutes={minutes} />
+          <SplitMonitor
+            id={id}
+            start={startDate.toISOString()}
+            end={endDate.toISOString()}
+            minutes={minutes}
+          />
         )}
       </div>
     </div>

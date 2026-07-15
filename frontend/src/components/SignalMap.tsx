@@ -415,7 +415,7 @@ export function SignalMap(props: {
   const points = located.map((i) => [i.lat!, i.lon!] as [number, number])
   const center: [number, number] = points[0] ?? [40.75, -73.99]
   const [markerMenu, setMarkerMenu] = useState<MarkerMenuState | null>(null)
-  const [baseLayer, setBaseLayer] = useState<BaseLayer>('street')
+  const [baseLayer, setBaseLayer] = useState<BaseLayer>('satellite')
 
   return (
     <MapContainer

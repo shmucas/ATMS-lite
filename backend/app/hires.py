@@ -177,19 +177,23 @@ class HiresStore:
                 self._conn = None
             await asyncio.sleep(FLUSH_INTERVAL_S)
 
-    async def query(self, location_id, minutes=15, limit=1000):
-        """Recent events for one intersection, newest first."""
+    async def query(self, location_id, minutes=15, limit=1000, start=None, end=None):
+        """Events for one intersection, newest first.
+
+        Either an explicit [start, end] range or a trailing `minutes` window
+        (the default) selects the events.
+        """
         if self._conn is None or self._conn.closed:
             raise RuntimeError('hi-res store is not connected to the database')
-        since = (datetime.datetime.now(datetime.timezone.utc)
-                 - datetime.timedelta(minutes=minutes))
+        until = end or datetime.datetime.now(datetime.timezone.utc)
+        since = start or (until - datetime.timedelta(minutes=minutes))
         async with self._db_lock:
             async with self._conn.cursor() as cur:
                 await cur.execute(
                     'SELECT ts, event_code, event_param FROM hires_events '
-                    'WHERE location_id = %s AND ts >= %s '
+                    'WHERE location_id = %s AND ts >= %s AND ts <= %s '
                     'ORDER BY ts DESC LIMIT %s',
-                    (location_id, since, limit))
+                    (location_id, since, until, limit))
                 rows = await cur.fetchall()
         return [{'ts': ts.isoformat(timespec='milliseconds'),
                  'event_code': code, 'event_param': param}

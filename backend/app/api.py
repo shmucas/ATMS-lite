@@ -3,6 +3,7 @@
 import asyncio
 import re
 import secrets
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -251,19 +252,45 @@ def events(iid: str, request: Request):
     return list(request.app.state.hub.events.get(iid, []))
 
 
+HIRES_MAX_RANGE_MINUTES = 60
+
+
 @router.get('/api/intersections/{iid}/hires')
 async def hires_events(iid: str, request: Request,
-                       minutes: int = 15, limit: int = 1000):
-    """Recent hi-res (Indiana enumeration) events derived from polling."""
+                       minutes: int = 15, limit: int = 1000,
+                       start: str | None = None, end: str | None = None):
+    """Hi-res (Indiana enumeration) events derived from polling.
+
+    Either an explicit start/end range (ISO 8601, capped to
+    HIRES_MAX_RANGE_MINUTES) or a trailing `minutes` window from now.
+    """
     if request.app.state.pollers.get(iid) is None:
         raise HTTPException(404, f'unknown intersection {iid}')
     store = request.app.state.hires
     if store is None:
         raise HTTPException(
             503, 'hi-res capture is not enabled; set ATMS_DB_DSN')
+
+    start_dt = end_dt = None
+    if start is not None or end is not None:
+        if start is None or end is None:
+            raise HTTPException(400, 'start and end must both be set')
+        try:
+            start_dt = datetime.fromisoformat(start)
+            end_dt = datetime.fromisoformat(end)
+        except ValueError:
+            raise HTTPException(400, 'start and end must be ISO 8601 timestamps')
+        if end_dt <= start_dt:
+            raise HTTPException(400, 'end must be after start')
+        span = end_dt - start_dt
+        if span > timedelta(minutes=HIRES_MAX_RANGE_MINUTES):
+            raise HTTPException(
+                400, f'range cannot exceed {HIRES_MAX_RANGE_MINUTES} minutes')
+
     try:
-        return await store.query(iid, minutes=max(1, min(minutes, 1440)),
-                                 limit=max(1, min(limit, 10000)))
+        return await store.query(
+            iid, minutes=max(1, min(minutes, HIRES_MAX_RANGE_MINUTES)),
+            limit=max(1, min(limit, 10000)), start=start_dt, end=end_dt)
     except RuntimeError as exc:
         raise HTTPException(503, str(exc))
 

@@ -66,10 +66,20 @@ export const intersectionsApi = {
     port?: number;
     read_community?: string;
   }): Promise<ProbeResult> => request("POST", "/api/probe", body),
-  hires: (id: string, opts: { minutes?: number; limit?: number } = {}) => {
+  hires: (
+    id: string,
+    opts: {
+      minutes?: number;
+      limit?: number;
+      start?: string;
+      end?: string;
+    } = {},
+  ) => {
     const params = new URLSearchParams();
     if (opts.minutes != null) params.set("minutes", String(opts.minutes));
     if (opts.limit != null) params.set("limit", String(opts.limit));
+    if (opts.start != null) params.set("start", opts.start);
+    if (opts.end != null) params.set("end", opts.end);
     const qs = params.toString();
     return request(
       "GET",
