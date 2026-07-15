@@ -121,12 +121,16 @@ def parse_concurrency(value):
 
 def build_rings(ring_by_phase, concurrency_by_phase):
     """Turn the controller's own ring and concurrency config into the ring and
-    barrier layout the UI draws.
+    barrier layout the UI draws, plus the per-phase concurrency map that
+    decides which phases may legally be held or forced off together.
 
     A barrier is a set of phases that may run together. Two phases sit in the
     same barrier group when they are concurrent with each other, so we group
     phases by their concurrency set. This reads the truth off the controller
-    rather than assuming the textbook 1-8 layout.
+    rather than assuming the textbook 1-8 layout. The barrier grouping is a
+    coarser view for display; `concurrency` is the actual pairwise truth and
+    is what the control path validates a phase pair against (a barrier can
+    hold phases that are not all pairwise concurrent, e.g. split/lag phasing).
     """
     # Ring 0 means the phase is not assigned to a ring: the controller
     # advertises 40 phases but only the configured ones are real. Drop the rest
@@ -161,9 +165,15 @@ def build_rings(ring_by_phase, concurrency_by_phase):
 
     barriers = [sorted(b) for b in merged]
     barriers.sort(key=lambda b: b[0] if b else 0)
+
+    concurrency = {
+        phase: sorted(c for c in concurrency_by_phase.get(phase, []) if c in active)
+        for phase in active
+    }
     return (
         [{'ring': r, 'phases': p} for r, p in sorted(rings.items())],
         barriers,
+        concurrency,
     )
 
 

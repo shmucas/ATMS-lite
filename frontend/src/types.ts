@@ -108,5 +108,9 @@ export interface IntersectionInfo {
     polled_phases?: number
     rings?: { ring: number; phases: number[] }[]
     barriers?: number[][]
+    /* Per-phase concurrency, keyed by phase number (JSON object keys are
+       strings): which other phases this one may legally run alongside.
+       Ground truth for what a "phase pair" is allowed to be. */
+    concurrency?: Record<string, number[]>
   } | null
 }

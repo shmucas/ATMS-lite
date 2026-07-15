@@ -7,6 +7,7 @@ export interface ControlState {
   ped_calls: Record<string, number>
   holds: Record<string, number>
   omits: Record<string, number>
+  force_offs: Record<string, number>
   forced_phase: number | null
 }
 

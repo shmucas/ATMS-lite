@@ -46,18 +46,21 @@ def test_build_rings_standard_dual_ring():
         1: [5, 6], 2: [5, 6], 5: [1, 2], 6: [1, 2],
         3: [7, 8], 4: [7, 8], 7: [3, 4], 8: [3, 4],
     }
-    rings, barriers = ntcip.build_rings(ring_by_phase, conc)
+    rings, barriers, concurrency = ntcip.build_rings(ring_by_phase, conc)
     assert rings == [{'ring': 1, 'phases': [1, 2, 3, 4]},
                      {'ring': 2, 'phases': [5, 6, 7, 8]}]
     assert barriers == [[1, 2, 5, 6], [3, 4, 7, 8]]
+    assert concurrency[1] == [5, 6]
+    assert concurrency[7] == [3, 4]
 
 
 def test_build_rings_drops_unassigned_phases():
     ring_by_phase = {1: 1, 2: 1, 3: 0, 4: 0}
     conc = {1: [2], 2: [1], 3: [], 4: []}
-    rings, barriers = ntcip.build_rings(ring_by_phase, conc)
+    rings, barriers, concurrency = ntcip.build_rings(ring_by_phase, conc)
     assert rings == [{'ring': 1, 'phases': [1, 2]}]
     assert barriers == [[1, 2]]
+    assert concurrency == {1: [2], 2: [1]}
 
 
 def test_build_rings_merges_bridging_groups():
@@ -65,5 +68,6 @@ def test_build_rings_merges_bridging_groups():
     Phases 1 and 2 look disjoint until phase 3's concurrency links both."""
     ring_by_phase = {1: 1, 2: 1, 3: 2}
     conc = {1: [], 2: [], 3: [1, 2]}
-    rings, barriers = ntcip.build_rings(ring_by_phase, conc)
+    rings, barriers, concurrency = ntcip.build_rings(ring_by_phase, conc)
     assert barriers == [[1, 2, 3]]
+    assert concurrency[3] == [1, 2]

@@ -24,6 +24,10 @@ class FakeHub:
             'polled_phases': polled_phases,
             'rings': [{'ring': 1, 'phases': [1, 2, 3, 4]},
                       {'ring': 2, 'phases': [5, 6, 7, 8]}],
+            'concurrency': {
+                1: [5, 6], 2: [5, 6], 5: [1, 2], 6: [1, 2],
+                3: [7, 8], 4: [7, 8], 7: [3, 4], 8: [3, 4],
+            },
         }}
         self.control = {}
         self.published = []
@@ -103,6 +107,76 @@ def test_force_omits_ring_companions_and_release_restores(tmp_path):
         assert controller.status()['omits'] == {1: 0}
         assert (control_oid(control_mod.OMIT_COL, 1), 0) in client.sets
         await controller.disarm()
+
+    asyncio.run(scenario())
+
+
+def test_hold_group_single_phase(tmp_path):
+    controller, client, _ = make_controller(tmp_path)
+
+    async def scenario():
+        await controller.arm()
+        await controller.hold_group([3])
+        assert controller.status()['holds'] == {1: 0b100}
+        await controller.hold_group([3], on=False)
+        assert controller.status()['holds'] == {1: 0}
+        await controller.disarm()
+
+    asyncio.run(scenario())
+
+
+def test_hold_group_concurrent_pair_writes_once_per_group(tmp_path):
+    controller, client, _ = make_controller(tmp_path)
+
+    async def scenario():
+        await controller.arm()
+        await controller.hold_group([2, 6])
+        assert controller.status()['holds'] == {1: (1 << 1) | (1 << 5)}
+        writes = [s for s in client.sets if s[0] == control_oid(control_mod.HOLD_COL, 1)]
+        # Phase 2 -> group 1 bit 1, phase 6 -> group 1 bit 5: one write, combined mask.
+        assert writes[-1] == (control_oid(control_mod.HOLD_COL, 1), (1 << 1) | (1 << 5))
+        await controller.disarm()
+
+    asyncio.run(scenario())
+
+
+def test_hold_group_rejects_non_concurrent_phases(tmp_path):
+    controller, client, _ = make_controller(tmp_path)
+
+    async def scenario():
+        await controller.arm()
+        with pytest.raises(ControlError):
+            await controller.hold_group([1, 3])  # same ring, never concurrent
+        assert client.sets == []
+        await controller.disarm()
+
+    asyncio.run(scenario())
+
+
+def test_force_off_group_writes_force_off_column(tmp_path):
+    controller, client, _ = make_controller(tmp_path)
+
+    async def scenario():
+        await controller.arm()
+        await controller.force_off_group([2, 6])
+        assert controller.status()['force_offs'] == {1: (1 << 1) | (1 << 5)}
+        assert (control_oid(control_mod.FORCE_OFF_COL, 1), (1 << 1) | (1 << 5)) in client.sets
+        await controller.force_off_group([2, 6], on=False)
+        assert controller.status()['force_offs'] == {1: 0}
+        await controller.disarm()
+
+    asyncio.run(scenario())
+
+
+def test_disarm_clears_force_off(tmp_path):
+    controller, client, _ = make_controller(tmp_path)
+
+    async def scenario():
+        await controller.arm()
+        await controller.force_off_group([3])
+        await controller.disarm()
+        assert (control_oid(control_mod.FORCE_OFF_COL, 1), 0) in client.sets
+        assert controller.status()['force_offs'] == {}
 
     asyncio.run(scenario())
 

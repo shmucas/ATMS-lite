@@ -1,21 +1,31 @@
 import clsx from 'clsx'
 import { PED_TEXT, SIGNAL_FILL as FILL } from '../lib/phaseColors'
+import { maskHasPhase } from '../lib/phaseMask'
 import type { IntersectionInfo, Phase, Snapshot } from '../types'
 
 interface Props {
   snapshot: Snapshot
   info: IntersectionInfo
-  onPhaseClick?: (phase: number) => void
   armed?: boolean
+  selected?: Set<number>
+  onToggle?: (phase: number) => void
+  holds?: Record<string, number>
+  forceOffs?: Record<string, number>
 }
 
 function PhaseCell({
   p,
   clickable,
+  selected,
+  held,
+  forcedOff,
   onClick,
 }: {
   p: Phase
   clickable: boolean
+  selected: boolean
+  held: boolean
+  forcedOff: boolean
   onClick?: () => void
 }) {
   const serving = p.on
@@ -24,12 +34,18 @@ function PhaseCell({
       type="button"
       disabled={!clickable}
       onClick={onClick}
-      title={clickable ? `Place a vehicle call on phase ${p.phase}` : `Phase ${p.phase}`}
+      title={
+        clickable
+          ? `Select phase ${p.phase} for hold / force off`
+          : `Phase ${p.phase}`
+      }
       className={clsx(
         'relative flex flex-1 flex-col items-center justify-center gap-1 rounded-lg border py-2 transition-all',
-        serving
-          ? 'border-[var(--color-line-strong)] bg-[var(--color-panel-2)]'
-          : 'border-[var(--color-line)] bg-[var(--color-panel)]/40',
+        selected
+          ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 ring-1 ring-[var(--color-accent)]'
+          : serving
+            ? 'border-[var(--color-line-strong)] bg-[var(--color-panel-2)]'
+            : 'border-[var(--color-line)] bg-[var(--color-panel)]/40',
         p.signal === 'dark' && 'opacity-40',
         clickable
           ? 'cursor-pointer hover:border-[var(--color-accent)] hover:bg-[var(--color-panel-2)]'
@@ -37,8 +53,20 @@ function PhaseCell({
       )}
     >
       {p.next && (
-        <span className="absolute -top-1.5 rounded-full bg-[var(--color-accent)] px-1.5 text-[9px] font-bold text-black">
+        <span className="absolute -top-1.5 left-2 rounded-full bg-[var(--color-accent)] px-1.5 text-[9px] font-bold text-black">
           NEXT
+        </span>
+      )}
+      {(held || forcedOff) && (
+        <span
+          className={clsx(
+            'absolute -top-1.5 right-2 rounded-full px-1.5 text-[9px] font-bold',
+            forcedOff
+              ? 'bg-[var(--color-offline)] text-black'
+              : 'bg-[var(--color-degraded)] text-black',
+          )}
+        >
+          {forcedOff ? 'OFF' : 'HOLD'}
         </span>
       )}
       <div className="flex items-center gap-1.5">
@@ -83,7 +111,15 @@ function PhaseCell({
   )
 }
 
-export function RingDiagram({ snapshot, info, onPhaseClick, armed }: Props) {
+export function RingDiagram({
+  snapshot,
+  info,
+  armed,
+  selected,
+  onToggle,
+  holds,
+  forceOffs,
+}: Props) {
   const rings = info.static?.rings ?? []
   const barriers = info.static?.barriers ?? []
   const byPhase = new Map(snapshot.phases.map((p) => [p.phase, p]))
@@ -101,7 +137,7 @@ export function RingDiagram({ snapshot, info, onPhaseClick, armed }: Props) {
   return (
     <section>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
-        Ring &amp; barrier {armed && <span className="ml-1 text-[var(--color-degraded)]">· control live</span>}
+        Ring &amp; barrier {armed && <span className="ml-1 text-[var(--color-degraded)]">· control live, click phases to select</span>}
       </h3>
       <div className="flex gap-1.5">
         <div className="flex w-10 flex-col justify-around pt-5">
@@ -138,8 +174,11 @@ export function RingDiagram({ snapshot, info, onPhaseClick, armed }: Props) {
                         <PhaseCell
                           key={num}
                           p={p}
-                          clickable={!!onPhaseClick}
-                          onClick={() => onPhaseClick?.(num)}
+                          clickable={!!onToggle && !!armed}
+                          selected={selected?.has(num) ?? false}
+                          held={maskHasPhase(holds, num)}
+                          forcedOff={maskHasPhase(forceOffs, num)}
+                          onClick={() => onToggle?.(num)}
                         />
                       )
                     })}
@@ -156,6 +195,8 @@ export function RingDiagram({ snapshot, info, onPhaseClick, armed }: Props) {
         <Dot c={FILL.red} l="red" />
         <span>V vehicle call</span>
         <span>P ped call</span>
+        <span className="text-[var(--color-degraded)]">HOLD held</span>
+        <span className="text-[var(--color-offline)]">OFF forced off</span>
       </div>
     </section>
   )

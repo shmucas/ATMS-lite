@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { useState } from "react";
 import { control } from "../lib/control";
+import { isConcurrentSelection, maskHasPhase } from "../lib/phaseMask";
 import type { ControlState, StreamState } from "../lib/stream";
 import type { Connection, IntersectionInfo, Snapshot } from "../types";
 import { CoordMonitor } from "./CoordMonitor";
@@ -48,21 +49,26 @@ function SignalsTab(props: {
   const enabled = props.control?.armed ?? false;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [phaseInput, setPhaseInput] = useState("1");
   const forcedPhase = props.control?.forced_phase ?? null;
   const holds = props.control?.holds ?? {};
+  const forceOffs = props.control?.force_offs ?? {};
   const pedCalls = props.control?.ped_calls ?? {};
+  const vehCalls = props.control?.veh_calls ?? {};
   const phaseNum = parseInt(phaseInput, 10);
   const validPhase = Number.isInteger(phaseNum) && phaseNum >= 1;
-  const maskBit = (masks: Record<string, number>) =>
-    validPhase
-      ? Boolean(
-          (masks[String(((phaseNum - 1) >> 3) + 1)] ?? 0) &
-          (1 << ((phaseNum - 1) % 8)),
-        )
-      : false;
-  const phaseHeld = maskBit(holds);
-  const pedCalled = maskBit(pedCalls);
+  const pedCalled = validPhase ? maskHasPhase(pedCalls, phaseNum) : false;
+  const vehCalled = validPhase ? maskHasPhase(vehCalls, phaseNum) : false;
+
+  const selectedPhases = [...selected].sort((a, b) => a - b);
+  const concurrency = info.static?.concurrency;
+  const selectionLegal = isConcurrentSelection(concurrency, selectedPhases);
+  const selectionAllHeld =
+    selectedPhases.length > 0 && selectedPhases.every((p) => maskHasPhase(holds, p));
+  const selectionAllForcedOff =
+    selectedPhases.length > 0 &&
+    selectedPhases.every((p) => maskHasPhase(forceOffs, p));
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -76,10 +82,21 @@ function SignalsTab(props: {
     }
   };
 
-  const onPhaseClick =
-    enabled && info.connection !== "disconnected"
-      ? (phase: number) => run(() => control.call(info.id, "veh", phase, true))
-      : undefined;
+  const toggleSelect = (phase: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(phase)) next.delete(phase);
+      else next.add(phase);
+      return next;
+    });
+  };
+
+  const canSend =
+    enabled &&
+    info.connection !== "disconnected" &&
+    !busy &&
+    selectedPhases.length > 0 &&
+    selectionLegal;
 
   if (!snapshot) {
     return (
@@ -105,8 +122,11 @@ function SignalsTab(props: {
       <RingDiagram
         snapshot={snapshot}
         info={info}
-        onPhaseClick={onPhaseClick}
         armed={enabled}
+        selected={selected}
+        onToggle={toggleSelect}
+        holds={holds}
+        forceOffs={forceOffs}
       />
       <CoordMonitor snapshot={snapshot} />
 
@@ -119,17 +139,18 @@ function SignalsTab(props: {
             </div>
             <div className="mt-0.5 text-xs text-[var(--color-ink-2)]">
               {enabled
-                ? "Enabled. Click a phase above to place a live vehicle call on the controller."
-                : "Read-only. Enable to send vehicle calls to the physical controller."}
+                ? "Enabled. Click phases above to select them, then hold or force off."
+                : "Read-only. Enable to send hold / force off to the physical controller."}
             </div>
           </div>
           <button
             type="button"
             disabled={busy || info.connection === "disconnected"}
             onClick={() =>
-              run(() =>
-                enabled ? control.disarm(info.id) : control.arm(info.id),
-              )
+              run(async () => {
+                setSelected(new Set());
+                await (enabled ? control.disarm(info.id) : control.arm(info.id));
+              })
             }
             className={clsx(
               "shrink-0 rounded-lg px-3.5 py-2 text-xs font-semibold transition-colors disabled:opacity-40",
@@ -143,84 +164,153 @@ function SignalsTab(props: {
         </div>
         {enabled && (
           <div className="mt-3 rounded-md border border-[var(--color-degraded)]/30 bg-[var(--color-degraded)]/10 px-3 py-2 text-xs text-[var(--color-degraded)]">
-            Live control is enabled. Calls auto-clear when you disable it, the
-            link drops, or after 5 minutes.
+            Live control is enabled. Holds and force-offs auto-clear when you
+            disable it, the link drops, or after 5 minutes.
           </div>
         )}
         {enabled && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-line)] pt-3">
-            <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
-              Phase
-              <input
-                type="number"
-                min={1}
-                value={phaseInput}
-                onChange={(e) => setPhaseInput(e.target.value)}
-                className="w-14 rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel)] px-2 py-1 text-xs text-[var(--color-ink)]"
-              />
-            </label>
-            <button
-              type="button"
-              disabled={
-                busy || !validPhase || info.connection === "disconnected"
-              }
-              onClick={() =>
-                run(() => control.hold(info.id, phaseNum, !phaseHeld))
-              }
-              className={clsx(
-                "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
-                phaseHeld
-                  ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
-                  : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
-              )}
-            >
-              {phaseHeld ? "Release hold" : "Hold phase"}
-            </button>
-            <button
-              type="button"
-              disabled={
-                busy ||
-                !validPhase ||
-                info.connection === "disconnected" ||
-                (forcedPhase != null && forcedPhase !== phaseNum)
-              }
-              onClick={() =>
-                run(() =>
-                  control.force(info.id, phaseNum, forcedPhase !== phaseNum),
-                )
-              }
-              className={clsx(
-                "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
-                forcedPhase === phaseNum
-                  ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
-                  : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
-              )}
-            >
-              {forcedPhase === phaseNum ? "Release force" : "Force phase"}
-            </button>
-            <button
-              type="button"
-              disabled={
-                busy || !validPhase || info.connection === "disconnected"
-              }
-              onClick={() =>
-                run(() => control.call(info.id, "ped", phaseNum, !pedCalled))
-              }
-              className={clsx(
-                "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
-                pedCalled
-                  ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
-                  : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
-              )}
-            >
-              {pedCalled ? "Clear ped call" : "Ped call"}
-            </button>
-            {forcedPhase != null && (
-              <span className="text-[11px] text-[var(--color-ink-3)]">
-                Phase {forcedPhase} forced; all others in its ring are omitted.
+          <div className="mt-3 border-t border-[var(--color-line)] pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-[var(--color-ink-2)]">
+                {selectedPhases.length === 0
+                  ? "Click one phase, or a concurrent pair, on the diagram."
+                  : `Selected: ${selectedPhases.map((p) => `Φ${p}`).join(" + ")}`}
               </span>
+              <button
+                type="button"
+                disabled={!canSend}
+                onClick={() =>
+                  run(() =>
+                    control.hold(info.id, selectedPhases, !selectionAllHeld),
+                  )
+                }
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  selectionAllHeld
+                    ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
+                    : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
+                )}
+              >
+                {selectionAllHeld ? "Release hold" : "Hold"}
+              </button>
+              <button
+                type="button"
+                disabled={!canSend}
+                onClick={() =>
+                  run(() =>
+                    control.forceOff(
+                      info.id,
+                      selectedPhases,
+                      !selectionAllForcedOff,
+                    ),
+                  )
+                }
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  selectionAllForcedOff
+                    ? "bg-[var(--color-offline)] text-black hover:brightness-110"
+                    : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
+                )}
+              >
+                {selectionAllForcedOff ? "Release force off" : "Force off"}
+              </button>
+              {selectedPhases.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelected(new Set())}
+                  className="rounded-md px-2 py-1.5 text-xs text-[var(--color-ink-3)] hover:text-[var(--color-ink)]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {selectedPhases.length > 1 && !selectionLegal && (
+              <div className="mt-2 text-[11px] text-[var(--color-offline)]">
+                These phases cannot run concurrently on this intersection;
+                pick phases from the same barrier column instead.
+              </div>
             )}
           </div>
+        )}
+        {enabled && (
+          <details className="mt-3 border-t border-[var(--color-line)] pt-3">
+            <summary className="cursor-pointer text-[11px] font-semibold uppercase tracking-wider text-[var(--color-ink-3)]">
+              Other controls
+            </summary>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+                Phase
+                <input
+                  type="number"
+                  min={1}
+                  value={phaseInput}
+                  onChange={(e) => setPhaseInput(e.target.value)}
+                  className="w-14 rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel)] px-2 py-1 text-xs text-[var(--color-ink)]"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !validPhase ||
+                  info.connection === "disconnected" ||
+                  (forcedPhase != null && forcedPhase !== phaseNum)
+                }
+                onClick={() =>
+                  run(() =>
+                    control.force(info.id, phaseNum, forcedPhase !== phaseNum),
+                  )
+                }
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  forcedPhase === phaseNum
+                    ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
+                    : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
+                )}
+              >
+                {forcedPhase === phaseNum ? "Release force" : "Force phase to serve"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy || !validPhase || info.connection === "disconnected"
+                }
+                onClick={() =>
+                  run(() => control.call(info.id, "veh", phaseNum, !vehCalled))
+                }
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  vehCalled
+                    ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
+                    : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
+                )}
+              >
+                {vehCalled ? "Clear veh call" : "Veh call"}
+              </button>
+              <button
+                type="button"
+                disabled={
+                  busy || !validPhase || info.connection === "disconnected"
+                }
+                onClick={() =>
+                  run(() => control.call(info.id, "ped", phaseNum, !pedCalled))
+                }
+                className={clsx(
+                  "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  pedCalled
+                    ? "bg-[var(--color-degraded)] text-black hover:brightness-110"
+                    : "border border-[var(--color-line-strong)] text-[var(--color-ink-2)] hover:bg-[var(--color-panel)]",
+                )}
+              >
+                {pedCalled ? "Clear ped call" : "Ped call"}
+              </button>
+              {forcedPhase != null && (
+                <span className="text-[11px] text-[var(--color-ink-3)]">
+                  Phase {forcedPhase} forced; all others in its ring are omitted.
+                </span>
+              )}
+            </div>
+          </details>
         )}
         {error && (
           <div className="mt-3 rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-xs text-[var(--color-offline)]">

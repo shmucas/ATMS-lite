@@ -34,6 +34,12 @@ class CallBody(PhaseBody):
     kind: Literal['veh', 'ped'] = 'veh'
 
 
+class PhaseGroupBody(BaseModel):
+    """One phase, or a concurrent phase pair, held or forced off together."""
+    phases: list[StrictInt] = Field(min_length=1, max_length=8)
+    on: bool = True
+
+
 class IntersectionCreate(BaseModel):
     name: str
     host: str
@@ -326,12 +332,23 @@ async def place_call(iid: str, request: Request, body: CallBody,
 
 
 @router.post('/api/intersections/{iid}/hold')
-async def hold_phase(iid: str, request: Request, body: PhaseBody,
-                     x_control_token: str = Header(default='')):
+async def hold_phases(iid: str, request: Request, body: PhaseGroupBody,
+                      x_control_token: str = Header(default='')):
     _require_control_token(x_control_token)
     controller = _controller(request, iid)
     try:
-        return await controller.hold_phase(body.phase, body.on)
+        return await controller.hold_group(body.phases, body.on)
+    except ControlError as exc:
+        raise HTTPException(409, str(exc))
+
+
+@router.post('/api/intersections/{iid}/force-off')
+async def force_off_phases(iid: str, request: Request, body: PhaseGroupBody,
+                           x_control_token: str = Header(default='')):
+    _require_control_token(x_control_token)
+    controller = _controller(request, iid)
+    try:
+        return await controller.force_off_group(body.phases, body.on)
     except ControlError as exc:
         raise HTTPException(409, str(exc))
 

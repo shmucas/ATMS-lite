@@ -91,7 +91,7 @@ class Poller:
         phases = list(range(1, self.max_phases + 1))
         ring_oids = [f'{ntcip.PHASE_RING}.{p}' for p in phases]
         conc_oids = [f'{ntcip.PHASE_CONCURRENCY}.{p}' for p in phases]
-        rings, barriers = [], []
+        rings, barriers, concurrency = [], [], {}
         try:
             cfg_values = await self.client.get(ring_oids + conc_oids)
             ring_by_phase = {}
@@ -103,7 +103,7 @@ class Poller:
                 ring_by_phase[p] = int(ring)
                 conc_by_phase[p] = ntcip.parse_concurrency(
                     cfg_values.get(f'{ntcip.PHASE_CONCURRENCY}.{p}'))
-            rings, barriers = ntcip.build_rings(ring_by_phase, conc_by_phase)
+            rings, barriers, concurrency = ntcip.build_rings(ring_by_phase, conc_by_phase)
         except SnmpError as exc:
             # Ring config is a nicety; a controller that will not answer here
             # should still stream phase status.
@@ -118,6 +118,7 @@ class Poller:
             'polled_phases': self.max_phases,
             'rings': rings,
             'barriers': barriers,
+            'concurrency': concurrency,
         }
         self._static_loaded = True
         log.info('[%s] static loaded: %s phases, rings=%s barriers=%s',

@@ -42,7 +42,7 @@ describe('applyMessage', () => {
       intersections: [info('a')],
       snapshots: { a: snapshot('a') },
       events: [],
-      control: { a: { armed: false, armed_until: null, veh_calls: {}, ped_calls: {}, holds: {}, omits: {}, forced_phase: null } },
+      control: { a: { armed: false, armed_until: null, veh_calls: {}, ped_calls: {}, holds: {}, omits: {}, force_offs: {}, forced_phase: null } },
     })
     expect(s.intersections.map((i) => i.id)).toEqual(['a'])
     expect(Object.keys(s.snapshots).sort()).toEqual(['a', 'old'])

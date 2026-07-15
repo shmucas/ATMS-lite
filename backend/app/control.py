@@ -64,6 +64,7 @@ class Controller:
         self._ped = {}
         self._hold = {}
         self._omit = {}
+        self._force_off = {}
         self._forced_phase = None
         self._lock = asyncio.Lock()
 
@@ -76,6 +77,7 @@ class Controller:
             'ped_calls': dict(self._ped),
             'holds': dict(self._hold),
             'omits': dict(self._omit),
+            'force_offs': dict(self._force_off),
             'forced_phase': self._forced_phase,
         }
 
@@ -159,13 +161,62 @@ class Controller:
         if not 1 <= phase <= polled:
             raise ControlError(f'phase {phase} out of range 1..{polled}')
 
-    async def hold_phase(self, phase, on=True, actor='ui'):
-        self._check_phase(phase)
+    def _check_concurrent(self, phases):
+        """A phase pair (or larger group) may only be held or forced off
+        together if the controller's own concurrency table says they can run
+        at the same time. Ground truth is per-phase concurrency, not the
+        coarser barrier grouping, which can bundle phases that are not all
+        pairwise concurrent (split/lag phasing)."""
+        if len(phases) <= 1:
+            return
+        concurrency = self.hub.static.get(self.cfg['id'], {}).get('concurrency', {})
+        for a in phases:
+            allowed = set(concurrency.get(a, []))
+            for b in phases:
+                if b != a and b not in allowed:
+                    raise ControlError(
+                        f'phases {a} and {b} cannot run concurrently')
+
+    def _set_bits(self, store, phases, on):
+        """Set/clear bits for every phase in `phases`, returning the final
+        mask for each group touched so the caller writes each group once."""
+        groups = {}
+        for phase in phases:
+            group, mask = self._set_bit(store, phase, on)
+            groups[group] = mask
+        return groups
+
+    async def hold_group(self, phases, on=True, actor='ui'):
+        """Hold one phase, or a concurrent phase pair, in its current
+        interval. Passing a single phase is the common case."""
+        for phase in phases:
+            self._check_phase(phase)
+        self._check_concurrent(phases)
         async with self._lock:
             self._check_armed()
-            group, mask = self._set_bit(self._hold, phase, on)
-            await self._write(HOLD_COL, group, mask, actor,
-                              f'hold phase {phase} {"on" if on else "off"}')
+            groups = self._set_bits(self._hold, phases, on)
+            for group, mask in groups.items():
+                await self._write(HOLD_COL, group, mask, actor,
+                                  f'hold phases {phases} {"on" if on else "off"}')
+            self._publish()
+        return self.status()
+
+    async def hold_phase(self, phase, on=True, actor='ui'):
+        return await self.hold_group([phase], on=on, actor=actor)
+
+    async def force_off_group(self, phases, on=True, actor='ui'):
+        """True NTCIP force-off (phaseControlGroupForceOff): ends a phase's
+        green early so the ring can advance. One phase, or a concurrent
+        phase pair forced off together to clear a whole barrier."""
+        for phase in phases:
+            self._check_phase(phase)
+        self._check_concurrent(phases)
+        async with self._lock:
+            self._check_armed()
+            groups = self._set_bits(self._force_off, phases, on)
+            for group, mask in groups.items():
+                await self._write(FORCE_OFF_COL, group, mask, actor,
+                                  f'force off phases {phases} {"on" if on else "off"}')
             self._publish()
         return self.status()
 
@@ -250,10 +301,18 @@ class Controller:
                                       f'clear omit group {group} ({reason})')
                 except ControlError:
                     pass
+        for group, mask in list(self._force_off.items()):
+            if mask:
+                try:
+                    await self._write(FORCE_OFF_COL, group, 0, actor,
+                                      f'clear force off group {group} ({reason})')
+                except ControlError:
+                    pass
         self._veh.clear()
         self._ped.clear()
         self._hold.clear()
         self._omit.clear()
+        self._force_off.clear()
         self._forced_phase = None
 
     async def on_disconnect(self):
@@ -261,7 +320,8 @@ class Controller:
         state so a reconnect never silently re-applies stale calls."""
         async with self._lock:
             self._cancel_expiry()
-            if self.armed or self._veh or self._ped or self._hold or self._omit:
+            if (self.armed or self._veh or self._ped or self._hold
+                    or self._omit or self._force_off):
                 self.audit.write(self.cfg['id'], 'system', 'auto-disarm',
                                  {'reason': 'controller disconnected'})
             self.armed = False
@@ -270,6 +330,7 @@ class Controller:
             self._ped.clear()
             self._hold.clear()
             self._omit.clear()
+            self._force_off.clear()
             self._forced_phase = None
             self._publish()
 
