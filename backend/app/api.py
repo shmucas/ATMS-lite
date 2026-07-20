@@ -18,6 +18,7 @@ from .config import (CONTROL_TOKEN, ENV, SUPPORTED_DEVICE_TYPES,
 from .control import ControlError
 from .registry import start_intersection, stop_intersection
 from .snmp import SnmpClient, SnmpError
+from .summaries import intersection_summary, poller_summary
 
 router = APIRouter()
 
@@ -127,23 +128,6 @@ def _unique_id(base, existing_ids):
     return f'{base}-{n}'
 
 
-def _intersection_summary(app, cfg):
-    poller = app.state.pollers.get(cfg['id'])
-    return {
-        'id': cfg['id'],
-        'name': cfg['name'],
-        'host': cfg['host'],
-        'port': cfg['port'],
-        'device_type': cfg.get('device_type', 'maxtime'),
-        'lat': cfg['lat'],
-        'lon': cfg['lon'],
-        'movements': cfg.get('movements', []),
-        'corridor': cfg.get('corridor'),
-        'connection': poller.state if poller else 'unsupported',
-        'static': app.state.hub.static.get(cfg['id']) if poller else None,
-    }
-
-
 def _controller(request, iid):
     controller = request.app.state.controllers.get(iid)
     if controller is None:
@@ -158,26 +142,6 @@ def _require_control_token(token):
         return
     if not token or not secrets.compare_digest(token, CONTROL_TOKEN):
         raise HTTPException(401, 'invalid or missing control token')
-
-
-def _summary(poller, hub):
-    cfg = poller.cfg
-    latest = hub.latest.get(cfg['id'])
-    return {
-        'id': cfg['id'],
-        'name': cfg['name'],
-        'host': cfg['host'],
-        'device_type': cfg.get('device_type', 'maxtime'),
-        'lat': cfg['lat'],
-        'lon': cfg['lon'],
-        'movements': cfg.get('movements', []),
-        'corridor': cfg.get('corridor'),
-        'connection': poller.state,
-        'poll_latency_ms': poller.last_latency_ms,
-        'last_seq': latest['seq'] if latest else None,
-        'last_ts': latest['ts'] if latest else None,
-        'static': hub.static.get(cfg['id']),
-    }
 
 
 @router.get('/healthz')
@@ -197,7 +161,7 @@ def device_types():
 @router.get('/api/intersections')
 def intersections(request: Request):
     hub = request.app.state.hub
-    return [_summary(p, hub) for p in request.app.state.pollers.values()]
+    return [poller_summary(p, hub) for p in request.app.state.pollers.values()]
 
 
 @router.post('/api/probe')
@@ -416,7 +380,7 @@ async def create_intersection(request: Request, body: IntersectionCreate,
         write_raw_intersections(raw)
         start_intersection(request.app, cfg)
 
-    summary = _intersection_summary(request.app, cfg)
+    summary = intersection_summary(request.app, cfg)
     request.app.state.hub.publish_intersection_added(summary)
     return summary
 
@@ -473,7 +437,7 @@ async def update_intersection(iid: str, request: Request,
             for key in ('name', 'lat', 'lon', 'movements', 'corridor'):
                 live_cfg[key] = cfg[key]
 
-        summary = _intersection_summary(request.app, live_cfg)
+        summary = intersection_summary(request.app, live_cfg)
     request.app.state.hub.publish_intersection_updated(summary)
     return summary
 

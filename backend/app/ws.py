@@ -12,6 +12,8 @@ import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from .summaries import poller_summary, unsupported_summary
+
 log = logging.getLogger('atms.ws')
 
 router = APIRouter()
@@ -33,26 +35,10 @@ async def stream(ws: WebSocket):
 
         await ws.send_json({
             'type': 'hello',
-            'intersections': [
-                {'id': p.cfg['id'], 'name': p.cfg['name'],
-                 'lat': p.cfg['lat'], 'lon': p.cfg['lon'],
-                 'host': p.cfg['host'], 'port': p.cfg['port'],
-                 'device_type': p.cfg.get('device_type', 'maxtime'),
-                 'movements': p.cfg.get('movements', []),
-                 'corridor': p.cfg.get('corridor'),
-                 'connection': p.state,
-                 'static': hub.static.get(p.cfg['id'])}
-                for p in pollers.values()
-            ] + [
-                {'id': cfg['id'], 'name': cfg['name'],
-                 'lat': cfg['lat'], 'lon': cfg['lon'],
-                 'host': cfg['host'], 'port': cfg['port'],
-                 'device_type': cfg.get('device_type', 'maxtime'),
-                 'movements': cfg.get('movements', []),
-                 'corridor': cfg.get('corridor'),
-                 'connection': 'unsupported', 'static': None}
-                for cfg in ws.app.state.unsupported.values()
-            ],
+            'intersections': (
+                [poller_summary(p, hub) for p in pollers.values()]
+                + [unsupported_summary(cfg)
+                   for cfg in ws.app.state.unsupported.values()]),
             'snapshots': hub.latest,
             'events': history,
             'control': hub.control,
