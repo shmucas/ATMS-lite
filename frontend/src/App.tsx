@@ -24,6 +24,11 @@ export function App() {
   const [statusFilter, setStatusFilter] = useState<"online" | "offline" | null>(
     null,
   );
+  const [confirmDelete, setConfirmDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Close the drawer if the selected intersection disappears from the stream.
   useEffect(() => {
@@ -43,14 +48,21 @@ export function App() {
     (i) => i.connection === "disconnected" || i.connection === "unsupported",
   );
 
-  const deleteIntersection = async (id: string, name: string) => {
-    if (!window.confirm(`Remove ${name} from the network?`)) return;
+  const deleteIntersection = (id: string, name: string) => {
+    setDeleteError(null);
+    setConfirmDelete({ id, name });
+  };
+
+  const runDelete = async () => {
+    if (!confirmDelete) return;
+    const { id } = confirmDelete;
     try {
       await intersectionsApi.remove(id);
       if (selected === id) setSelected(null);
       if (editor?.id === id) setEditor(null);
+      setConfirmDelete(null);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : String(e));
+      setDeleteError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -293,6 +305,47 @@ export function App() {
         {reportsOpen && (
           <div className="absolute inset-x-0 bottom-0 z-[700] h-[480px] shadow-[0_-8px_24px_rgba(0,0,0,0.35)]">
             <AtspmReports stream={stream} onClose={() => setReportsOpen(false)} />
+          </div>
+        )}
+
+        {confirmDelete && (
+          <div
+            className="absolute inset-0 z-[900] flex items-center justify-center bg-black/40"
+            onClick={() => setConfirmDelete(null)}
+          >
+            <div
+              className="w-[320px] rounded-lg border border-[var(--color-line)] bg-[var(--color-panel)] p-4 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-sm font-semibold text-[var(--color-ink)]">
+                Remove {confirmDelete.name}?
+              </div>
+              <div className="mt-1 text-xs text-[var(--color-ink-2)]">
+                This removes it from the network and stops polling. The
+                controller itself is not touched.
+              </div>
+              {deleteError && (
+                <div className="mt-2 rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-2.5 py-1.5 text-xs text-[var(--color-offline)]">
+                  {deleteError}
+                </div>
+              )}
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(null)}
+                  className="rounded-md border border-[var(--color-line-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={runDelete}
+                  className="rounded-md bg-[var(--color-offline)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
