@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { intersectionsApi, type HiresEvent } from '../lib/intersections'
 import { SIGNAL_FILL } from '../lib/phaseColors'
+import { useHiresEvents } from '../lib/useHiresEvents'
 import {
   computeSplits,
   phasesWithSplits,
@@ -14,7 +14,6 @@ import {
 } from '../lib/purdueCoordination'
 import type { StreamState } from '../lib/stream'
 
-const REFRESH_MS = 5000
 const MARGIN = { top: 16, right: 20, bottom: 30, left: 40 }
 const PLOT_HEIGHT = 240
 const BAR_SLOT = 30 // px of horizontal room per cycle
@@ -46,6 +45,67 @@ function Tile(props: { label: string; value: string; unit?: string }) {
       </div>
     </div>
   )
+}
+
+function ReportError({ error }: { error: string }) {
+  return (
+    <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-sm text-[var(--color-offline)]">
+      {error.includes('ATMS_DB_DSN')
+        ? 'Hi-res capture is not enabled. Set ATMS_DB_DSN to record events for reports.'
+        : error}
+    </div>
+  )
+}
+
+function ReportEmpty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">{children}</div>
+  )
+}
+
+function PillPicker({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: number[]
+  value: number | null
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-1 text-xs text-[var(--color-ink-3)]">{label}</span>
+      {options.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onChange(p)}
+          className={
+            value === p
+              ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
+              : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+          }
+        >
+          {p}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* Keep a valid selection as the option list comes and goes. */
+function useValidSelection(options: number[]) {
+  const [value, setValue] = useState<number | null>(null)
+  useEffect(() => {
+    if (options.length === 0) {
+      setValue((v) => (v !== null ? null : v))
+    } else {
+      setValue((v) => (v == null || !options.includes(v) ? options[0] : v))
+    }
+  }, [options])
+  return [value, setValue] as const
 }
 
 function LegendKey({ color, label }: { color: string; label: string }) {
@@ -207,44 +267,10 @@ function SplitChart({ phase, splits }: { phase: number; splits: PhaseSplit[] }) 
 
 function SplitMonitor(props: { id: string; start: string; end: string; minutes: number }) {
   const { id, start, end, minutes } = props
-  const [events, setEvents] = useState<HiresEvent[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [phase, setPhase] = useState<number | null>(null)
-
-  useEffect(() => {
-    let stopped = false
-    const load = async () => {
-      try {
-        const rows = await intersectionsApi.hires(id, {
-          start,
-          end,
-          limit: Math.min(10000, minutes * 200),
-        })
-        if (stopped) return
-        setEvents(rows)
-        setError(null)
-      } catch (e) {
-        if (!stopped) setError(e instanceof Error ? e.message : String(e))
-      }
-    }
-    load()
-    const t = window.setInterval(load, REFRESH_MS)
-    return () => {
-      stopped = true
-      window.clearInterval(t)
-    }
-  }, [id, start, end, minutes])
+  const { events, error } = useHiresEvents(id, start, end, minutes)
 
   const phases = useMemo(() => (events ? phasesWithSplits(events) : []), [events])
-
-  // Keep a valid phase selected as data comes and goes.
-  useEffect(() => {
-    if (phases.length === 0) {
-      if (phase !== null) setPhase(null)
-    } else if (phase == null || !phases.includes(phase)) {
-      setPhase(phases[0])
-    }
-  }, [phases, phase])
+  const [phase, setPhase] = useValidSelection(phases)
 
   const series = useMemo(
     () =>
@@ -252,48 +278,24 @@ function SplitMonitor(props: { id: string; start: string; end: string; minutes: 
     [events, phase],
   )
 
-  if (error) {
-    return (
-      <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-sm text-[var(--color-offline)]">
-        {error.includes('ATMS_DB_DSN')
-          ? 'Hi-res capture is not enabled. Set ATMS_DB_DSN to record events for reports.'
-          : error}
-      </div>
-    )
-  }
+  if (error) return <ReportError error={error} />
 
   if (events == null) {
-    return <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">Loading...</div>
+    return <ReportEmpty>Loading...</ReportEmpty>
   }
 
   if (phases.length === 0) {
     return (
-      <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">
+      <ReportEmpty>
         No complete phase splits in the last {minutes} min yet. Splits appear once a phase
         has run a full green-to-yellow cycle.
-      </div>
+      </ReportEmpty>
     )
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs text-[var(--color-ink-3)]">Phase</span>
-        {phases.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPhase(p)}
-            className={
-              phase === p
-                ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
-                : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
-            }
-          >
-            {p}
-          </button>
-        ))}
-      </div>
+      <PillPicker label="Phase" options={phases} value={phase} onChange={setPhase} />
 
       {series && (
         <>
@@ -448,53 +450,12 @@ function PcdChart({
 
 function PurdueCoordination(props: { id: string; start: string; end: string; minutes: number }) {
   const { id, start, end, minutes } = props
-  const [events, setEvents] = useState<HiresEvent[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [phase, setPhase] = useState<number | null>(null)
-  const [channel, setChannel] = useState<number | null>(null)
-
-  useEffect(() => {
-    let stopped = false
-    const load = async () => {
-      try {
-        const rows = await intersectionsApi.hires(id, {
-          start,
-          end,
-          limit: Math.min(10000, minutes * 200),
-        })
-        if (stopped) return
-        setEvents(rows)
-        setError(null)
-      } catch (e) {
-        if (!stopped) setError(e instanceof Error ? e.message : String(e))
-      }
-    }
-    load()
-    const t = window.setInterval(load, REFRESH_MS)
-    return () => {
-      stopped = true
-      window.clearInterval(t)
-    }
-  }, [id, start, end, minutes])
+  const { events, error } = useHiresEvents(id, start, end, minutes)
 
   const phases = useMemo(() => (events ? phasesWithSplits(events) : []), [events])
   const channels = useMemo(() => (events ? detectorChannels(events) : []), [events])
-
-  useEffect(() => {
-    if (phases.length === 0) {
-      if (phase !== null) setPhase(null)
-    } else if (phase == null || !phases.includes(phase)) {
-      setPhase(phases[0])
-    }
-  }, [phases, phase])
-
-  useEffect(() => {
-    if (channels.length === 0) {
-      if (channel !== null) setChannel(null)
-    } else if (channel == null || !channels.includes(channel)) {
-      setChannel(channels[0])
-    }
-  }, [channels, channel])
+  const [phase, setPhase] = useValidSelection(phases)
+  const [channel, setChannel] = useValidSelection(channels)
 
   const cycles = useMemo(() => {
     if (!events || phase == null || channel == null) return []
@@ -507,73 +468,29 @@ function PurdueCoordination(props: { id: string; start: string; end: string; min
     )
   }, [events, phase, channel, start, end])
 
-  if (error) {
-    return (
-      <div className="rounded-md border border-[var(--color-offline)]/30 bg-[var(--color-offline)]/10 px-3 py-2 text-sm text-[var(--color-offline)]">
-        {error.includes('ATMS_DB_DSN')
-          ? 'Hi-res capture is not enabled. Set ATMS_DB_DSN to record events for reports.'
-          : error}
-      </div>
-    )
-  }
+  if (error) return <ReportError error={error} />
 
   if (events == null) {
-    return <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">Loading...</div>
+    return <ReportEmpty>Loading...</ReportEmpty>
   }
 
   if (phases.length === 0) {
     return (
-      <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">
+      <ReportEmpty>
         No complete phase cycles in the last {minutes} min yet. Cycles appear once a phase
         has run a full green-to-green cycle.
-      </div>
+      </ReportEmpty>
     )
   }
 
   if (channels.length === 0) {
-    return (
-      <div className="py-10 text-center text-sm text-[var(--color-ink-3)]">
-        No detector activity in the last {minutes} min yet.
-      </div>
-    )
+    return <ReportEmpty>No detector activity in the last {minutes} min yet.</ReportEmpty>
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs text-[var(--color-ink-3)]">Phase</span>
-        {phases.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPhase(p)}
-            className={
-              phase === p
-                ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
-                : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
-            }
-          >
-            {p}
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 text-xs text-[var(--color-ink-3)]">Detector</span>
-        {channels.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => setChannel(c)}
-            className={
-              channel === c
-                ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
-                : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
-            }
-          >
-            {c}
-          </button>
-        ))}
-      </div>
+      <PillPicker label="Phase" options={phases} value={phase} onChange={setPhase} />
+      <PillPicker label="Detector" options={channels} value={channel} onChange={setChannel} />
 
       {phase != null && channel != null && (
         <>
