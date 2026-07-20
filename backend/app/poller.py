@@ -63,6 +63,7 @@ class Poller:
         self.tick = 0
         self.det_count = DET_COUNT
         self.detectors = []
+        self._disconnect_task = None
         self.unit_status = {}
         self.green_samples_maxlen = MOE_WINDOW
         self.green_samples = collections.defaultdict(
@@ -290,7 +291,11 @@ class Poller:
                 # Safety: a link we cannot see is a link we must not hold calls
                 # on. Drop arm and desired state on disconnect.
                 if self.controller is not None:
-                    asyncio.create_task(self.controller.on_disconnect())
+                    # Keep a reference: asyncio holds tasks weakly, and a
+                    # dropped auto-disarm task would skip the safety clear.
+                    self._disconnect_task = asyncio.create_task(
+                        self.controller.on_disconnect(),
+                        name=f"disconnect-{self.cfg['id']}")
         elif self.state in (CONNECTED, STARTING):
             self.state = DEGRADED
             self._event('degraded', str(exc))
