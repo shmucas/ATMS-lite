@@ -3,7 +3,7 @@
 import asyncio
 import re
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -286,6 +286,12 @@ async def hires_events(iid: str, request: Request,
             end_dt = datetime.fromisoformat(end)
         except ValueError:
             raise HTTPException(400, 'start and end must be ISO 8601 timestamps')
+        # A naive timestamp would be read in the database session's timezone,
+        # silently shifting the window; treat it as UTC explicitly instead.
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
         if end_dt <= start_dt:
             raise HTTPException(400, 'end must be after start')
         span = end_dt - start_dt
