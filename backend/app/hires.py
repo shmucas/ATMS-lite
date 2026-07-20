@@ -183,13 +183,19 @@ class HiresStore:
         if not self._buffer or self._conn is None:
             return
         rows, self._buffer = self._buffer, []
-        async with self._db_lock:
-            async with self._conn.cursor() as cur:
-                async with cur.copy(
-                        'COPY hires_events (location_id, ts, event_code, '
-                        'event_param) FROM STDIN') as copy:
-                    for row in rows:
-                        await copy.write_row(row)
+        try:
+            async with self._db_lock:
+                async with self._conn.cursor() as cur:
+                    async with cur.copy(
+                            'COPY hires_events (location_id, ts, event_code, '
+                            'event_param) FROM STDIN') as copy:
+                        for row in rows:
+                            await copy.write_row(row)
+        except Exception:
+            # Requeue in front so a transient blip does not lose the batch;
+            # add() still sheds oldest-first if the cap is hit meanwhile.
+            self._buffer[:0] = rows[-MAX_BUFFER:]
+            raise
 
     async def _run(self):
         while True:
