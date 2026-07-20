@@ -235,15 +235,38 @@ class Controller:
                 if self._forced_phase is not None and self._forced_phase != phase:
                     raise ControlError(
                         f'phase {self._forced_phase} is already forced; release it first')
-                for other in ring['phases']:
-                    if other == phase:
-                        continue
-                    group, mask = self._set_bit(self._omit, other, True)
-                    await self._write(OMIT_COL, group, mask, actor,
-                                      f'omit phase {other} (forcing {phase})')
-                group, mask = self._set_bit(self._veh, phase, True)
-                await self._write(VEH_CALL_COL, group, mask, actor,
-                                  f'veh_call phase {phase} on (force)')
+                # Roll back any omits already written if a later SET fails,
+                # so a half-applied force never leaves phases stuck omitted.
+                applied = []
+                try:
+                    for other in ring['phases']:
+                        if other == phase:
+                            continue
+                        group, mask = self._set_bit(self._omit, other, True)
+                        await self._write(OMIT_COL, group, mask, actor,
+                                          f'omit phase {other} (forcing {phase})')
+                        applied.append(other)
+                    group, mask = self._set_bit(self._veh, phase, True)
+                    await self._write(VEH_CALL_COL, group, mask, actor,
+                                      f'veh_call phase {phase} on (force)')
+                except ControlError:
+                    self._set_bit(self._veh, phase, False)
+                    # Clear the store bit for every omit attempted (the failed
+                    # write set its bit locally too), but only re-write the
+                    # ones that actually reached the controller.
+                    for other in ring['phases']:
+                        if other == phase:
+                            continue
+                        group, mask = self._set_bit(self._omit, other, False)
+                        if other not in applied:
+                            continue
+                        try:
+                            await self._write(
+                                OMIT_COL, group, mask, actor,
+                                f'rollback omit phase {other} (force {phase} failed)')
+                        except ControlError:
+                            pass
+                    raise
                 self._forced_phase = phase
             else:
                 for other in ring['phases']:
