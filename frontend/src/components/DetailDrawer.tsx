@@ -351,7 +351,7 @@ function SignalsTab(props: {
 
       <div className="tabular flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[var(--color-ink-3)]">
         <span>poll {snapshot.poll_latency_ms} ms</span>
-        <span>seq {snapshot.seq}</span>
+        <span>updated {Math.max(0, (Date.now() - new Date(snapshot.ts).getTime()) / 1000).toFixed(1)}s ago</span>
         <span>
           {info.static?.polled_phases ?? 8} of{" "}
           {info.static?.controller_max_phases ?? "?"} phases

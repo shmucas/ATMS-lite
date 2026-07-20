@@ -38,6 +38,21 @@ function useWeather(lat?: number, lon?: number) {
   return w
 }
 
+/* Operators correlate what they see with when it happened; give them a
+   wall clock without reaching for another window. */
+function Clock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(t)
+  }, [])
+  return (
+    <span className="tabular text-xs font-semibold text-[var(--color-ink)]">
+      {now.toLocaleTimeString([], { hour12: false })}
+    </span>
+  )
+}
+
 function Stat(props: { value: number; label: string; color: string }) {
   return (
     <div className="flex items-center gap-2">
@@ -163,6 +178,7 @@ export function TopBar({
             {'°'}F
           </span>
         )}
+        <Clock />
         <span className="flex items-center gap-1.5">
           <span
             className="h-2 w-2 rounded-full"
