@@ -109,6 +109,31 @@ function useValidSelection(options: number[]) {
   return [value, setValue] as const
 }
 
+/* Sparse clock-time labels under the bars, one every few slots so they
+   never collide. Both charts are one-bar-per-cycle, so time is the only
+   x-axis reading that makes the chart self-explanatory. */
+function TimeTicks({ times, xOf }: { times: number[]; xOf: (i: number) => number }) {
+  const step = Math.max(1, Math.ceil(64 / BAR_SLOT))
+  return (
+    <>
+      {times.map((t, i) =>
+        i % step === 0 ? (
+          <text
+            key={i}
+            x={xOf(i)}
+            y={MARGIN.top + PLOT_HEIGHT + 14}
+            textAnchor="middle"
+            fontSize={8}
+            fill="var(--color-ink-3)"
+          >
+            {new Date(t).toLocaleTimeString([], { hour12: false })}
+          </text>
+        ) : null,
+      )}
+    </>
+  )
+}
+
 function LegendKey({ color, label }: { color: string; label: string }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-ink-2)]">
@@ -214,6 +239,8 @@ function SplitChart({ phase, splits }: { phase: number; splits: PhaseSplit[] }) 
               </g>
             )
           })}
+
+          <TimeTicks times={splits.map((s) => s.greenStart)} xOf={xOf} />
 
           {/* Cycle length trace, one shared seconds axis with the splits. */}
           <polyline
@@ -418,6 +445,8 @@ function PcdChart({
               </g>
             )
           })}
+
+          <TimeTicks times={cycles.map((c) => c.cycleStart)} xOf={xOf} />
         </svg>
       </div>
 
