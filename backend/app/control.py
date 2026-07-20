@@ -372,6 +372,10 @@ class Controller:
 class AuditLog:
     """Append-only JSONL audit of every control action."""
 
+    # tail() reads at most this many bytes off the end of the file, so the
+    # endpoint's cost stays flat as the log grows over months of bench work.
+    TAIL_READ_BYTES = 512 * 1024
+
     def __init__(self, path):
         self.path = pathlib.Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -385,5 +389,19 @@ class AuditLog:
     def tail(self, limit=100):
         if not self.path.exists():
             return []
-        lines = self.path.read_text().splitlines()[-limit:]
-        return [json.loads(line) for line in lines]
+        with self.path.open('rb') as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - self.TAIL_READ_BYTES))
+            chunk = fh.read().decode(errors='replace')
+        lines = chunk.splitlines()
+        # A mid-line start point leaves a partial first record; drop it.
+        if size > self.TAIL_READ_BYTES and lines:
+            lines = lines[1:]
+        out = []
+        for line in lines[-limit:]:
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
