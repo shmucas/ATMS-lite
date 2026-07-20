@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeCycles, detectorChannels } from './purdueCoordination'
+import { arrivalsOnGreenPct, computeCycles, detectorChannels } from './purdueCoordination'
 import type { HiresEvent } from './intersections'
 
 // Two full cycles of phase 2 (green -> yellow -> red, 60s apart), with
@@ -74,6 +74,18 @@ describe('computeCycles', () => {
 
   it('returns no cycles when the phase never went green in the window', () => {
     expect(computeCycles(events, 5, 3, windowStart, windowEnd)).toEqual([])
+  })
+})
+
+describe('arrivalsOnGreenPct', () => {
+  it('is green arrivals over arrivals with a known band', () => {
+    const cycles = computeCycles(events, 2, 3, windowStart, windowEnd)
+    // Two green arrivals, one red arrival.
+    expect(arrivalsOnGreenPct(cycles)).toBeCloseTo((100 * 2) / 3)
+  })
+
+  it('is null when no arrival landed in a known band', () => {
+    expect(arrivalsOnGreenPct([])).toBeNull()
   })
 })
 

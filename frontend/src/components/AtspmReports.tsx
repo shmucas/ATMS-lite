@@ -8,6 +8,7 @@ import {
   type PhaseSplit,
 } from '../lib/splitMonitor'
 import {
+  arrivalsOnGreenPct,
   computeCycles,
   detectorChannels,
   type PcdCycle,
@@ -499,6 +500,14 @@ function PurdueCoordination(props: { id: string; start: string; end: string; min
             <Tile
               label="Total arrivals"
               value={String(cycles.reduce((n, c) => n + c.actuations.length, 0))}
+            />
+            <Tile
+              label="Arrivals on green"
+              value={(() => {
+                const aog = arrivalsOnGreenPct(cycles)
+                return aog != null ? fmt(aog, 0) : '-'
+              })()}
+              unit="%"
             />
           </div>
           <PcdChart phase={phase} channel={channel} cycles={cycles} />

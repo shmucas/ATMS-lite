@@ -54,6 +54,23 @@ export function detectorChannels(events: HiresEvent[]): number[] {
   return [...channels].sort((a, b) => a - b)
 }
 
+/* Percent arrivals on green: the PCD's headline number. Arrivals whose
+   band is unknown (no interval covers them) are excluded from the
+   denominator rather than counted as not-green. Null when no arrival
+   landed in a known band. */
+export function arrivalsOnGreenPct(cycles: PcdCycle[]): number | null {
+  let green = 0
+  let known = 0
+  for (const c of cycles) {
+    for (const a of c.actuations) {
+      if (a.signal == null) continue
+      known++
+      if (a.signal === 'green') green++
+    }
+  }
+  return known > 0 ? (100 * green) / known : null
+}
+
 export function computeCycles(
   events: HiresEvent[],
   phase: number,
