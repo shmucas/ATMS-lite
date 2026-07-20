@@ -7,7 +7,7 @@ a dashboard displaying signal phase status and the ability to hold/force off pha
 
 ATMS-lite was built and verified end to end against real hardware. (My test bench controller: A Intelight Model 2070 LC that connects to my laptop via ethernet)
 
-![ATMS-lite dashboard: map view with an intersection's live signal status, ring-and-barrier diagram, and satellite mini-map of its lane movements](docs/images/dashboard.png)
+![ATMS-lite dashboard demo: four virtual controllers polled over SNMP, live ring-and-barrier status, 42nd St corridor time-space diagram, ATSPM split monitor](docs/images/dashboard.gif)
 
 ## What it does
 
