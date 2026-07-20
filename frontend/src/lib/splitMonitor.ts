@@ -85,6 +85,24 @@ export function phasesWithSplits(events: HiresEvent[]): number[] {
     .sort((a, b) => a - b)
 }
 
+/* Every phase with any signal onset in the window, ascending. The picker
+   shows these all, disabling the ones without a complete split, so "phase 4
+   never served" and "the tool doesn't cover phase 4" stay distinguishable. */
+export function phasesSeen(events: HiresEvent[]): number[] {
+  const phases = new Set<number>()
+  for (const e of events) {
+    if (
+      (e.event_code === GREEN || e.event_code === YELLOW || e.event_code === RED) &&
+      e.event_param != null &&
+      e.event_param > 0 &&
+      e.event_param <= 16
+    ) {
+      phases.add(e.event_param)
+    }
+  }
+  return [...phases].sort((a, b) => a - b)
+}
+
 export function summarize(phase: number, splits: PhaseSplit[]): PhaseSplitSeries {
   const greens = splits.map((s) => s.green)
   const cycles = splits.map((s) => s.cycle).filter((c): c is number => c != null)

@@ -3,6 +3,7 @@ import { SIGNAL_FILL } from '../lib/phaseColors'
 import { useHiresEvents } from '../lib/useHiresEvents'
 import {
   computeSplits,
+  phasesSeen,
   phasesWithSplits,
   summarize,
   type PhaseSplit,
@@ -69,29 +70,40 @@ function PillPicker({
   options,
   value,
   onChange,
+  disabled = [],
+  disabledTitle,
 }: {
   label: string
   options: number[]
   value: number | null
   onChange: (v: number) => void
+  disabled?: number[]
+  disabledTitle?: string
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="mr-1 text-xs text-[var(--color-ink-3)]">{label}</span>
-      {options.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => onChange(p)}
-          className={
-            value === p
-              ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
-              : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
-          }
-        >
-          {p}
-        </button>
-      ))}
+      {options.map((p) => {
+        const off = disabled.includes(p)
+        return (
+          <button
+            key={p}
+            type="button"
+            disabled={off}
+            title={off ? disabledTitle : undefined}
+            onClick={() => onChange(p)}
+            className={
+              off
+                ? 'cursor-not-allowed rounded-md border border-[var(--color-line)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-3)] opacity-50'
+                : value === p
+                  ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
+                  : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+            }
+          >
+            {p}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -298,6 +310,7 @@ function SplitMonitor(props: { id: string; start: string; end: string; minutes: 
   const { events, error } = useHiresEvents(id, start, end, minutes)
 
   const phases = useMemo(() => (events ? phasesWithSplits(events) : []), [events])
+  const seen = useMemo(() => (events ? phasesSeen(events) : []), [events])
   const [phase, setPhase] = useValidSelection(phases)
 
   const series = useMemo(
@@ -323,7 +336,14 @@ function SplitMonitor(props: { id: string; start: string; end: string; minutes: 
 
   return (
     <div className="space-y-3">
-      <PillPicker label="Phase" options={phases} value={phase} onChange={setPhase} />
+      <PillPicker
+        label="Phase"
+        options={seen}
+        value={phase}
+        onChange={setPhase}
+        disabled={seen.filter((p) => !phases.includes(p))}
+        disabledTitle="No complete green-to-yellow split in this range"
+      />
 
       {series && (
         <>
@@ -483,6 +503,7 @@ function PurdueCoordination(props: { id: string; start: string; end: string; min
   const { events, error } = useHiresEvents(id, start, end, minutes)
 
   const phases = useMemo(() => (events ? phasesWithSplits(events) : []), [events])
+  const seen = useMemo(() => (events ? phasesSeen(events) : []), [events])
   const channels = useMemo(() => (events ? detectorChannels(events) : []), [events])
   const [phase, setPhase] = useValidSelection(phases)
   const [channel, setChannel] = useValidSelection(channels)
@@ -519,7 +540,14 @@ function PurdueCoordination(props: { id: string; start: string; end: string; min
 
   return (
     <div className="space-y-3">
-      <PillPicker label="Phase" options={phases} value={phase} onChange={setPhase} />
+      <PillPicker
+        label="Phase"
+        options={seen}
+        value={phase}
+        onChange={setPhase}
+        disabled={seen.filter((p) => !phases.includes(p))}
+        disabledTitle="No complete green-to-green cycle in this range"
+      />
       <PillPicker label="Detector" options={channels} value={channel} onChange={setChannel} />
 
       {phase != null && channel != null && (
