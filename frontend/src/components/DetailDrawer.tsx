@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { control } from "../lib/control";
 import { isConcurrentSelection, maskHasPhase } from "../lib/phaseMask";
 import type { ControlState, StreamState } from "../lib/stream";
@@ -36,6 +36,29 @@ function StatusPill({ state }: { state: Connection }) {
         style={{ background: s.color }}
       />
       {s.text}
+    </span>
+  );
+}
+
+/* Live countdown to the arm window's expiry, so an engineer mid-test sees
+   the auto-disarm coming instead of a surprise 409 on the next click. */
+function ArmCountdown({ until }: { until: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const left = Math.max(0, Math.round((new Date(until).getTime() - now) / 1000));
+  const m = Math.floor(left / 60);
+  const s = String(left % 60).padStart(2, "0");
+  return (
+    <span
+      className={clsx(
+        "tabular font-semibold",
+        left <= 30 && "animate-pulse text-[var(--color-offline)]",
+      )}
+    >
+      {m}:{s}
     </span>
   );
 }
@@ -165,7 +188,14 @@ function SignalsTab(props: {
         {enabled && (
           <div className="mt-3 rounded-md border border-[var(--color-degraded)]/30 bg-[var(--color-degraded)]/10 px-3 py-2 text-xs text-[var(--color-degraded)]">
             Live control is enabled. Holds and force-offs auto-clear when you
-            disable it, the link drops, or after 5 minutes.
+            disable it, the link drops, or when the timer runs out
+            {props.control?.armed_until && (
+              <>
+                {": "}
+                <ArmCountdown until={props.control.armed_until} />
+              </>
+            )}
+            .
           </div>
         )}
         {enabled && (
