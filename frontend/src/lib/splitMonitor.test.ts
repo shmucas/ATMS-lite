@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeSplits, phasesWithSplits, summarize } from './splitMonitor'
+import { computePedService, computeSplits, phasesWithSplits, summarize } from './splitMonitor'
 import type { HiresEvent } from './intersections'
 
 // Two full activations of phase 2, each green -> yellow -> red, with a
@@ -56,5 +56,26 @@ describe('summarize', () => {
     expect(s.maxGreen).toBe(25)
     expect(s.avgCycle).toBe(60)
     expect(s.splits).toHaveLength(2)
+  })
+})
+
+describe('computePedService', () => {
+  it('averages complete walk -> clearance -> dont-walk sequences', () => {
+    const ped: HiresEvent[] = [
+      { ts: '2026-07-13T00:00:00.000Z', event_code: 21, event_param: 2 },
+      { ts: '2026-07-13T00:00:07.000Z', event_code: 22, event_param: 2 },
+      { ts: '2026-07-13T00:00:22.000Z', event_code: 23, event_param: 2 },
+      // Clipped second service: walk with no clearance after it.
+      { ts: '2026-07-13T00:01:00.000Z', event_code: 21, event_param: 2 },
+    ]
+    expect(computePedService(ped, 2)).toEqual({
+      services: 1,
+      avgWalk: 7,
+      avgClearance: 15,
+    })
+  })
+
+  it('is null when the phase served no complete ped interval', () => {
+    expect(computePedService([], 2)).toBeNull()
   })
 })

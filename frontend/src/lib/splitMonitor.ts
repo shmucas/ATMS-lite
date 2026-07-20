@@ -103,6 +103,49 @@ export function phasesSeen(events: HiresEvent[]): number[] {
   return [...phases].sort((a, b) => a - b)
 }
 
+const PED_WALK = 21
+const PED_CLEAR = 22
+const PED_DONT_WALK = 23
+
+export interface PedService {
+  services: number // complete walk -> clearance -> dont-walk sequences
+  avgWalk: number // seconds of walk
+  avgClearance: number // seconds of flashing dont-walk
+}
+
+/* Ped service per phase from the walk (21) / clearance (22) / solid
+   dont-walk (23) onsets. Only complete walk->clearance->dont-walk
+   sequences count, same no-clipped-edges discipline as computeSplits.
+   Null when the phase served no complete ped interval in the window. */
+export function computePedService(events: HiresEvent[], phase: number): PedService | null {
+  const onsets = events
+    .filter(
+      (e) =>
+        e.event_param === phase &&
+        (e.event_code === PED_WALK ||
+          e.event_code === PED_CLEAR ||
+          e.event_code === PED_DONT_WALK),
+    )
+    .map((e) => ({ t: new Date(e.ts).getTime(), code: e.event_code }))
+    .sort((a, b) => a.t - b.t)
+
+  const walks: number[] = []
+  const clears: number[] = []
+  for (let i = 0; i + 2 < onsets.length; i++) {
+    if (
+      onsets[i].code === PED_WALK &&
+      onsets[i + 1].code === PED_CLEAR &&
+      onsets[i + 2].code === PED_DONT_WALK
+    ) {
+      walks.push((onsets[i + 1].t - onsets[i].t) / 1000)
+      clears.push((onsets[i + 2].t - onsets[i + 1].t) / 1000)
+    }
+  }
+  if (walks.length === 0) return null
+  const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
+  return { services: walks.length, avgWalk: avg(walks), avgClearance: avg(clears) }
+}
+
 export function summarize(phase: number, splits: PhaseSplit[]): PhaseSplitSeries {
   const greens = splits.map((s) => s.green)
   const cycles = splits.map((s) => s.cycle).filter((c): c is number => c != null)

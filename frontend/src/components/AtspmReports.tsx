@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { SIGNAL_FILL } from '../lib/phaseColors'
 import { useHiresEvents } from '../lib/useHiresEvents'
 import {
+  computePedService,
   computeSplits,
   phasesSeen,
   phasesWithSplits,
@@ -318,6 +319,10 @@ function SplitMonitor(props: { id: string; start: string; end: string; minutes: 
       events && phase != null ? summarize(phase, computeSplits(events, phase)) : null,
     [events, phase],
   )
+  const ped = useMemo(
+    () => (events && phase != null ? computePedService(events, phase) : null),
+    [events, phase],
+  )
 
   if (error) return <ReportError error={error} />
 
@@ -361,6 +366,13 @@ function SplitMonitor(props: { id: string; start: string; end: string; minutes: 
             />
             <Tile label="Cycles" value={String(series.splits.length)} />
           </div>
+          {ped && (
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <Tile label="Ped services" value={String(ped.services)} />
+              <Tile label="Avg walk" value={fmt(ped.avgWalk)} unit="s" />
+              <Tile label="Avg ped clearance" value={fmt(ped.avgClearance)} unit="s" />
+            </div>
+          )}
           <SplitChart phase={series.phase} splits={series.splits} />
         </>
       )}
