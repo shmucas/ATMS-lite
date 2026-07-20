@@ -524,18 +524,34 @@ const REPORT_LABEL: Record<ReportType, string> = {
   pcd: 'Purdue Coordination Diagram',
 }
 
+const LIVE_PRESETS = [15, 30, 60] // minutes
+const LIVE_TICK_MS = 5000
+
 export function AtspmReports(props: { stream: StreamState; onClose: () => void }) {
   const { stream, onClose } = props
   const ix = stream.intersections
   const [report, setReport] = useState<ReportType>('split')
   const [id, setId] = useState<string | null>(null)
+  /* Live mode slides a trailing window forward as data arrives - the way an
+     engineer actually watches an intersection. Custom pins explicit times. */
+  const [preset, setPreset] = useState<number | 'custom'>(15)
+  const [now, setNow] = useState(() => Date.now())
   const [start, setStart] = useState(() =>
     toLocalInputValue(new Date(Date.now() - 30 * 60_000)),
   )
   const [end, setEnd] = useState(() => toLocalInputValue(new Date()))
 
-  const startDate = new Date(start)
-  const endDate = new Date(end)
+  useEffect(() => {
+    if (preset === 'custom') return
+    const t = window.setInterval(() => setNow(Date.now()), LIVE_TICK_MS)
+    return () => window.clearInterval(t)
+  }, [preset])
+
+  const live = preset !== 'custom'
+  // Round the live edge to the tick so child props stay stable between ticks.
+  const liveEnd = Math.floor(now / LIVE_TICK_MS) * LIVE_TICK_MS
+  const startDate = live ? new Date(liveEnd - preset * 60_000) : new Date(start)
+  const endDate = live ? new Date(liveEnd) : new Date(end)
   const rangeInvalid = !(endDate.getTime() > startDate.getTime())
   const minutes = rangeInvalid
     ? 0
@@ -614,29 +630,70 @@ export function AtspmReports(props: { stream: StreamState; onClose: () => void }
             ))}
           </select>
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
-          From
-          <input
-            type="datetime-local"
-            value={start}
-            max={end}
-            onChange={(e) => onStartChange(e.target.value)}
-            className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
-          To
-          <input
-            type="datetime-local"
-            value={end}
-            min={start}
-            onChange={(e) => onEndChange(e.target.value)}
-            className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
-          />
-        </label>
-        <span className="text-[10px] text-[var(--color-ink-3)]">
-          Up to {MAX_RANGE_MINUTES} min per report
-        </span>
+        <div className="flex items-center gap-1.5">
+          {LIVE_PRESETS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setPreset(m)}
+              className={
+                preset === m
+                  ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
+                  : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+              }
+            >
+              {m}m
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              // Pin the current live window so custom starts where live left off.
+              setStart(toLocalInputValue(startDate))
+              setEnd(toLocalInputValue(endDate))
+              setPreset('custom')
+            }}
+            className={
+              preset === 'custom'
+                ? 'rounded-md border border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]'
+                : 'rounded-md border border-[var(--color-line-strong)] px-2.5 py-1 text-xs font-medium text-[var(--color-ink-2)] hover:bg-[var(--color-panel-2)]'
+            }
+          >
+            Custom
+          </button>
+        </div>
+        {preset === 'custom' ? (
+          <>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+              From
+              <input
+                type="datetime-local"
+                value={start}
+                max={end}
+                onChange={(e) => onStartChange(e.target.value)}
+                className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-[var(--color-ink-2)]">
+              To
+              <input
+                type="datetime-local"
+                value={end}
+                min={start}
+                onChange={(e) => onEndChange(e.target.value)}
+                className="rounded-md border border-[var(--color-line-strong)] bg-[var(--color-panel-2)] px-2 py-1 text-xs text-[var(--color-ink)]"
+              />
+            </label>
+            <span className="text-[10px] text-[var(--color-ink-3)]">
+              Up to {MAX_RANGE_MINUTES} min per report
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[10px] text-[var(--color-ink-3)]">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--color-online)]" />
+            Live · last {preset} min
+          </span>
+        )}
       </div>
 
       <div className="scroll-thin flex-1 overflow-y-auto p-4">
